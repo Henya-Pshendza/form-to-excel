@@ -1,0 +1,24 @@
+# ממשק משתמש
+streamlit>=1.35.0
+
+# עיבוד PDF
+pdfplumber>=0.11.0
+pdf2image>=1.17.0
+pypdf2>=3.0.1
+
+# עיבוד תמונה (גרסאות ללא הגבלת Python)
+Pillow>=10.0.0
+opencv-python-headless>=4.8.0.74
+numpy>=1.26.0
+
+# LLM Vision
+openai>=1.30.0
+python-dotenv>=1.0.0
+
+# ייצוא אקסל
+openpyxl>=3.1.2
+pandas>=2.0.0
+
+# נרמול וחיפוש מחרוזות
+python-dateutil>=2.8.2
+rapidfuzz>=3.0.0

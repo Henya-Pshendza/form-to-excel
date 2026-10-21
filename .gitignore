@@ -1,0 +1,28 @@
+# סביבה וירטואלית
+venv/
+.venv/
+env/
+
+# מפתח API - לעולם לא ל-git!
+.env
+
+# פלטים
+outputs/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# VS Code
+.vscode/
+
+# טפסים שהועלו (נתוני חולים)
+tests/sample_forms/*.pdf
+tests/sample_forms/*.jpg
+tests/sample_forms/*.jpeg
+tests/sample_forms/*.png
+
+# macOS
+.DS_Store
