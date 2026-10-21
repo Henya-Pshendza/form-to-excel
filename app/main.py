@@ -3,35 +3,34 @@ app/main.py
 -----------
 ממשק Streamlit — נקודת הכניסה לאפליקציה.
 
-הרצה:
-    streamlit run app/main.py
-
-זרימת המשתמש:
+פיצ'רים:
   1. העלאת קבצים (PDF / תמונות)
-  2. לחיצה על "עבד טפסים"
-  3. צפייה בטבלה עם השדות + סימון צבע
-  4. תיקון שדות לא-בטוחים ישירות בטבלה
-  5. לחיצה על "ייצא לאקסל" + הורדה
+  2. עיבוד עם GPT-4o Vision
+  3. תצוגת טופס לצד שדות — רואים את הטופס המקורי ליד הנתונים
+  4. מצב "בדיקה מהירה" — מציג רק שורות עם בעיות
+  5. משפט סיכום עם זמן עיבוד
+  6. תיקון ידני + ייצוא לאקסל
 """
 
 from __future__ import annotations
 
 import sys
 import os
+import io
+import time
 from pathlib import Path
 from typing import Any
 
 import streamlit as st
 import pandas as pd
 
-# ── הוספת תיקיית הפרויקט ל-PYTHONPATH כדי שה-imports יעבדו ──────────────
 ROOT = Path(__file__).parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app.pipeline import process_multiple_files
 from app.exporter import export_to_excel
-from app.confidence_handler import FieldStatus, STATUS_COLORS, STATUS_LABELS, count_issues
+from app.confidence_handler import FieldStatus, count_issues
 from config.fields import FIELDS
 from utils.file_utils import save_temp_file, delete_temp_file, is_supported_file
 from utils.logger import get_logger
@@ -49,57 +48,60 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# CSS מותאם — RTL, צבעי סטטוס, עיצוב כללי
 st.markdown("""
 <style>
-    /* RTL לכל האפליקציה */
-    .main, .stApp, .block-container {
-        direction: rtl;
-        text-align: right;
-    }
-    /* כותרות */
+    .main, .stApp, .block-container { direction: rtl; text-align: right; }
     h1, h2, h3, h4 { font-family: 'Segoe UI', Arial, sans-serif; }
-
-    /* תאי טבלה לפי סטטוס */
     .status-ok      { background-color: #d4edda; padding: 4px 8px; border-radius: 4px; }
     .status-low     { background-color: #fff3cd; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
     .status-missing { background-color: #f8d7da; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
     .status-error   { background-color: #e2e3e5; padding: 4px 8px; border-radius: 4px; }
-
-    /* כרטיסי סיכום */
-    .summary-card {
-        background: #f8f9fa;
-        border-radius: 8px;
-        padding: 16px;
-        text-align: center;
-        border: 1px solid #dee2e6;
-    }
-    /* כפתור ייצוא */
-    .stDownloadButton > button {
-        background-color: #28a745;
+    .summary-banner {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        font-size: 16px;
-        padding: 10px 24px;
-        border-radius: 8px;
-        border: none;
-        width: 100%;
+        padding: 16px 24px;
+        border-radius: 12px;
+        font-size: 18px;
+        font-weight: bold;
+        text-align: center;
+        margin: 12px 0;
+        direction: rtl;
     }
+    .form-preview-container {
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        padding: 8px;
+        background: #f8f9fa;
+    }
+    .field-card {
+        border-right: 4px solid #dee2e6;
+        padding: 6px 12px;
+        margin: 4px 0;
+        border-radius: 0 6px 6px 0;
+        direction: rtl;
+    }
+    .field-ok      { border-right-color: #28a745; background: #f0fff4; }
+    .field-low     { border-right-color: #ffc107; background: #fffdf0; }
+    .field-missing { border-right-color: #dc3545; background: #fff5f5; }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Session State — שמירת מצב בין interactions
+# Session State
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _init_state() -> None:
-    """מאתחל את session_state אם זו הפעלה ראשונה."""
     defaults = {
-        "forms":          [],      # רשימת טפסים מעובדים
-        "processing":     False,   # האם עיבוד פעיל כרגע
-        "excel_bytes":    None,    # bytes של קובץ האקסל לייצוא
-        "excel_filename": "",      # שם קובץ האקסל
-        "error_msg":      "",      # הודעת שגיאה אחרונה
+        "forms":            [],
+        "form_images":      {},    # {index: base64_image_string} לתצוגה
+        "processing":       False,
+        "excel_bytes":      None,
+        "excel_filename":   "",
+        "error_msg":        "",
+        "processing_time":  0.0,   # זמן עיבוד בשניות
+        "quick_review":     False, # מצב בדיקה מהירה
+        "selected_form":    0,     # טופס נבחר לתצוגה
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -113,15 +115,12 @@ def _init_state() -> None:
 def main() -> None:
     _init_state()
 
-    # ── כותרת ──────────────────────────────────────────────────────────────
     st.title("🧪 מטפסי התחייבות לאקסל")
-    st.caption("מנוע חילוץ אוטומטי לטפסי התחייבות — המעבדה המרכזית לנגיפים")
+    st.caption("מנוע חילוץ אוטומטי — המעבדה המרכזית לנגיפים | האקתון AI קוד פתוח 2026")
     st.divider()
 
-    # ── סרגל צד ──────────────────────────────────────────────────────────
     _render_sidebar()
 
-    # ── גוף ראשי ─────────────────────────────────────────────────────────
     if not st.session_state.forms:
         _render_upload_section()
     else:
@@ -133,11 +132,9 @@ def main() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _render_sidebar() -> None:
-    """מציג הגדרות ומידע בסרגל הצד."""
     with st.sidebar:
         st.header("⚙️ הגדרות")
 
-        # בדיקת API Key
         api_key = os.getenv("OPENAI_API_KEY", "")
         if api_key and api_key.startswith("sk-"):
             st.success("✓ OpenAI API Key מוגדר")
@@ -147,18 +144,20 @@ def _render_sidebar() -> None:
 
         st.divider()
 
-        # כפתור איפוס
         if st.session_state.forms:
             if st.button("🔄 טפסים חדשים", use_container_width=True):
-                st.session_state.forms = []
-                st.session_state.excel_bytes = None
-                st.session_state.excel_filename = ""
-                st.session_state.error_msg = ""
+                for key in ["forms", "form_images", "excel_bytes",
+                            "excel_filename", "error_msg", "processing_time"]:
+                    st.session_state[key] = {} if key == "form_images" else \
+                                            [] if key == "forms" else \
+                                            0.0 if key == "processing_time" else \
+                                            None if key in ("excel_bytes",) else ""
+                st.session_state.quick_review = False
+                st.session_state.selected_form = 0
                 st.rerun()
 
         st.divider()
 
-        # מקרא צבעים
         st.subheader("מקרא")
         st.markdown("""
         <div class="status-ok">✓ תקין — ביטחון גבוה</div><br>
@@ -172,12 +171,10 @@ def _render_sidebar() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# חלק העלאה
+# העלאה ועיבוד
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _render_upload_section() -> None:
-    """מציג את אזור העלאת הקבצים ועיבודם."""
-
     col1, col2 = st.columns([2, 1])
 
     with col1:
@@ -193,281 +190,449 @@ def _render_upload_section() -> None:
         st.subheader("ℹ️ מה נחלץ")
         for field_key, field_def in FIELDS.items():
             multi_mark = " (כמה)" if field_def["multi"] else ""
-            req_mark   = " *" if field_def["required"] else ""
+            req_mark   = " *"     if field_def["required"] else ""
             st.markdown(f"• **{field_def['excel_col']}**{multi_mark}{req_mark}")
         st.caption("* = שדה חובה")
 
-    # הודעת שגיאה אחרונה
     if st.session_state.error_msg:
         st.error(st.session_state.error_msg)
 
-    # כפתור עיבוד
     if uploaded_files:
         st.info(f"נבחרו **{len(uploaded_files)}** קבצים")
-
-        if st.button(
-            "▶ עבד טפסים",
-            type="primary",
-            use_container_width=True,
-            disabled=st.session_state.processing,
-        ):
+        if st.button("▶ עבד טפסים", type="primary", use_container_width=True,
+                     disabled=st.session_state.processing):
             _run_processing(uploaded_files)
     else:
-        st.markdown("""
-        ---
-        **טיפ:** ניתן לגרור מספר קבצים בבת אחת.
-        כל דף PDF יעובד בנפרד כטופס אחד.
-        """)
+        st.markdown("---\n**טיפ:** ניתן לגרור מספר קבצים בבת אחת. כל דף PDF יעובד בנפרד.")
 
 
 def _run_processing(uploaded_files) -> None:
-    """
-    מריץ את ה-pipeline על הקבצים שהועלו.
-    שומר קבצים זמניים, מעבד, ומנקה.
-    """
     st.session_state.processing = True
     st.session_state.error_msg  = ""
     temp_paths: list[Path] = []
 
     try:
-        # שמירת קבצים זמניים
         valid_paths: list[Path] = []
+        original_names: dict[str, str] = {}  # temp_path → שם מקורי
+
         for uf in uploaded_files:
             if not is_supported_file(uf.name):
                 st.warning(f"פורמט לא נתמך: {uf.name} — מדולג")
                 continue
             suffix = Path(uf.name).suffix
             tmp = save_temp_file(uf.read(), suffix)
-            # שומרים את שם הקובץ המקורי ב-metadata
-            tmp_with_name = tmp.rename(tmp.parent / f"{tmp.stem}_{uf.name}")
-            temp_paths.append(tmp_with_name)
-            valid_paths.append(tmp_with_name)
+            tmp_named = tmp.rename(tmp.parent / f"{tmp.stem}_{uf.name}")
+            temp_paths.append(tmp_named)
+            valid_paths.append(tmp_named)
 
         if not valid_paths:
             st.error("לא נמצאו קבצים תקינים לעיבוד")
             return
 
-        # progress bar
         progress_bar = st.progress(0, text="מתחיל עיבוד...")
         status_text  = st.empty()
 
         def update_progress(current: int, total: int, message: str) -> None:
             if total > 0:
-                pct = int((current / total) * 100)
-                progress_bar.progress(pct, text=message)
+                progress_bar.progress(int((current / total) * 100), text=message)
             status_text.caption(message)
 
-        # הרצת pipeline
+        # מדידת זמן עיבוד
+        start_time = time.time()
+
         with st.spinner("מעבד טפסים עם GPT-4o Vision..."):
             forms = process_multiple_files(valid_paths, update_progress)
+
+        elapsed = time.time() - start_time
 
         progress_bar.progress(100, text="✓ עיבוד הושלם")
         status_text.empty()
 
         if forms:
-            st.session_state.forms = forms
+            # שמירת תמונות הטפסים לתצוגה לצד השדות
+            form_images = _load_form_images(valid_paths, len(forms))
+
+            st.session_state.forms           = forms
+            st.session_state.form_images     = form_images
+            st.session_state.processing_time = elapsed
             st.rerun()
         else:
             st.session_state.error_msg = "לא חולצו טפסים. בדקי שהקבצים תקינים."
 
     except EnvironmentError as e:
-        # OPENAI_API_KEY חסר
         st.session_state.error_msg = f"❌ {e}"
-        logger.error(f"EnvironmentError: {e}")
-
     except Exception as e:
         st.session_state.error_msg = f"❌ שגיאה בעיבוד: {e}"
         logger.error(f"שגיאת עיבוד: {e}", exc_info=True)
-
     finally:
-        # מחיקת קבצים זמניים בכל מקרה
         for p in temp_paths:
             delete_temp_file(p)
         st.session_state.processing = False
 
 
+def _load_form_images(file_paths: list[Path], expected_count: int) -> dict[int, bytes]:
+    """
+    טוען את תמונות הטפסים לזיכרון לתצוגה בממשק.
+    מחזיר dict: {form_index: image_bytes}
+    """
+    from app.pdf_handler import load_input_file
+    from app.image_processor import resize_if_needed
+    import io as _io
+
+    images: dict[int, bytes] = {}
+    form_idx = 0
+
+    for file_path in file_paths:
+        try:
+            pages = load_input_file(file_path)
+            for page in pages:
+                if form_idx >= expected_count:
+                    break
+                # resize לתצוגה — לא צריך full resolution
+                thumb = resize_if_needed(page, max_dim=800)
+                buf = _io.BytesIO()
+                thumb.save(buf, format="JPEG", quality=75)
+                images[form_idx] = buf.getvalue()
+                form_idx += 1
+        except Exception as e:
+            logger.debug(f"לא ניתן לטעון תמונה לתצוגה: {e}")
+            form_idx += 1
+
+    return images
+
+
 # ─────────────────────────────────────────────────────────────────────────────
-# חלק תוצאות
+# תוצאות
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _render_results_section() -> None:
-    """מציג את תוצאות החילוץ עם אפשרות תיקון וייצוא."""
     forms = st.session_state.forms
 
-    # ── סיכום ────────────────────────────────────────────────────────────
-    _render_summary(forms)
+    # ── 1. משפט סיכום ────────────────────────────────────────────────────
+    _render_processing_summary(forms)
     st.divider()
 
-    # ── טבלת תיקון ────────────────────────────────────────────────────────
-    st.subheader("📋 תוצאות — ערוך לפני ייצוא")
-    st.caption("שדות כתומים = לא בטוח, אדומים = חסר. ערוך ישירות בטבלה.")
+    # ── 2. מצב בדיקה מהירה / תצוגה מלאה ─────────────────────────────────
+    col_mode1, col_mode2, col_mode3 = st.columns([1, 1, 2])
+    with col_mode1:
+        if st.button("⚠️ בדיקה מהירה — רק בעיות",
+                     type="primary" if st.session_state.quick_review else "secondary",
+                     use_container_width=True):
+            st.session_state.quick_review = True
+            st.rerun()
+    with col_mode2:
+        if st.button("📋 הצג הכל",
+                     type="primary" if not st.session_state.quick_review else "secondary",
+                     use_container_width=True):
+            st.session_state.quick_review = False
+            st.rerun()
 
-    edited_forms = _render_editable_table(forms)
-    st.session_state.forms = edited_forms
+    # סינון לפי מצב
+    if st.session_state.quick_review:
+        display_forms  = [(i, f) for i, f in enumerate(forms)
+                          if _form_has_status(f, FieldStatus.LOW)
+                          or _form_has_status(f, FieldStatus.MISSING)
+                          or _form_has_status(f, FieldStatus.ERROR)]
+        issues_count = len(display_forms)
+        if issues_count == 0:
+            st.success("✅ כל הטפסים תקינים! אין בעיות לבדיקה.")
+            st.session_state.quick_review = False
+        else:
+            st.warning(f"מציג {issues_count} טפסים הדורשים בדיקה מתוך {len(forms)}")
+    else:
+        display_forms = list(enumerate(forms))
 
     st.divider()
 
-    # ── ייצוא ────────────────────────────────────────────────────────────
-    _render_export_section(edited_forms)
+    # ── 3. תצוגת טופס לצד שדות ───────────────────────────────────────────
+    if display_forms:
+        _render_form_with_preview(display_forms, forms)
+
+    st.divider()
+
+    # ── 4. טבלה מלאה לעריכה ──────────────────────────────────────────────
+    with st.expander("📊 טבלה מלאה לעריכה וייצוא", expanded=True):
+        edited_forms = _render_editable_table(forms)
+        st.session_state.forms = edited_forms
+
+    st.divider()
+
+    # ── 5. ייצוא ─────────────────────────────────────────────────────────
+    _render_export_section(st.session_state.forms)
 
 
-def _render_summary(forms: list[dict]) -> None:
-    """מציג כרטיסי סיכום: סה"כ טפסים, תקינים, לא-בטוחים, חסרים."""
-    total   = len(forms)
-    ok_c    = sum(1 for f in forms if _form_all_ok(f))
-    low_c   = sum(1 for f in forms if _form_has_status(f, FieldStatus.LOW))
-    miss_c  = sum(1 for f in forms if _form_has_status(f, FieldStatus.MISSING))
+# ─────────────────────────────────────────────────────────────────────────────
+# פיצ'ר 1: משפט סיכום עם זמן עיבוד
+# ─────────────────────────────────────────────────────────────────────────────
 
-    cols = st.columns(4)
-    metrics = [
-        ("📄 סה\"כ טפסים",    total,  None),
-        ("✅ תקינים לחלוטין", ok_c,   "normal"),
-        ("⚠️ דורשים בדיקה",  low_c,  "inverse" if low_c > 0 else "normal"),
-        ("❌ שדות חסרים",     miss_c, "inverse" if miss_c > 0 else "normal"),
-    ]
-    for col, (label, value, delta_color) in zip(cols, metrics):
-        with col:
-            st.metric(label=label, value=value)
-
-
-def _render_editable_table(forms: list[dict]) -> list[dict]:
+def _render_processing_summary(forms: list[dict]) -> None:
     """
-    מציג טבלה עם st.data_editor לעריכה ישירה.
-    שדות לא-בטוחים מסומנים בצבע ברקע.
-
-    Args:
-        forms: רשימת טפסים מעובדים
-
-    Returns:
-        רשימת טפסים אחרי עריכה ידנית
+    מציג משפט סיכום אחד עם כל המידע החשוב:
+    כמה טפסים, כמה תקינים, כמה דורשים בדיקה, זמן עיבוד.
     """
-    # בניית DataFrame מהנתונים
-    df, field_col_map = _forms_to_dataframe(forms)
+    total      = len(forms)
+    ok_count   = sum(1 for f in forms if _form_all_ok(f))
+    low_count  = sum(1 for f in forms if _form_has_status(f, FieldStatus.LOW))
+    miss_count = sum(1 for f in forms if _form_has_status(f, FieldStatus.MISSING))
+    elapsed    = st.session_state.processing_time
 
-    # הגדרת עמודות לעריכה
-    column_config = _build_column_config(df.columns.tolist())
+    # בניית משפט סיכום
+    issues = low_count + miss_count
+    if issues == 0:
+        status_text = "✅ כולם תקינים"
+    else:
+        parts = []
+        if low_count > 0:
+            parts.append(f"{low_count} דורשים בדיקה")
+        if miss_count > 0:
+            parts.append(f"{miss_count} עם שדות חסרים")
+        status_text = "⚠️ " + ", ".join(parts)
 
-    # הצגת הטבלה הניתנת לעריכה
-    edited_df = st.data_editor(
-        df,
-        column_config=column_config,
-        use_container_width=True,
-        hide_index=True,
-        num_rows="fixed",
-        key="forms_editor",
+    # פורמט זמן
+    if elapsed < 60:
+        time_str = f"{elapsed:.0f} שניות"
+    else:
+        mins = int(elapsed // 60)
+        secs = int(elapsed % 60)
+        time_str = f"{mins} דקות {secs} שניות"
+
+    summary = (
+        f"עובדו {total} טפסים · "
+        f"{ok_count} תקינים · "
+        f"{status_text} · "
+        f"זמן עיבוד: {time_str}"
     )
 
-    # הצגת סטטוסים בצד
-    _render_status_legend_inline(forms)
+    st.markdown(f'<div class="summary-banner">{summary}</div>', unsafe_allow_html=True)
 
-    # המרה חזרה לפורמט forms
+    # מטריקות מהירות
+    cols = st.columns(4)
+    cols[0].metric("📄 סה\"כ טפסים",     total)
+    cols[1].metric("✅ תקינים לחלוטין",  ok_count)
+    cols[2].metric("⚠️ דורשים בדיקה",   low_count)
+    cols[3].metric("❌ שדות חסרים",      miss_count)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# פיצ'ר 2: תצוגת טופס לצד שדות
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _render_form_with_preview(
+    display_forms: list[tuple[int, dict]],
+    all_forms: list[dict],
+) -> None:
+    """
+    מציג בורר טפסים + תמונת הטופס המקורי לצד השדות שחולצו.
+    """
+    st.subheader("🔍 צפייה בטופס לצד השדות")
+
+    # בורר טופס
+    form_labels = []
+    for orig_idx, form in display_forms:
+        src   = form.get("source_file", f"טופס {orig_idx+1}")
+        page  = form.get("page", 1)
+        issues = count_issues(form)
+        has_issue = issues.get("low", 0) + issues.get("missing", 0) > 0
+        icon  = "⚠️" if has_issue else "✅"
+        # קצר את שם הקובץ
+        short_name = src[:30] + "..." if len(src) > 30 else src
+        form_labels.append(f"{icon} דף {page} — {short_name}")
+
+    selected_label = st.selectbox(
+        "בחרי טופס לצפייה:",
+        options=form_labels,
+        index=min(st.session_state.selected_form, len(form_labels) - 1),
+        key="form_selector",
+    )
+    selected_pos = form_labels.index(selected_label)
+    st.session_state.selected_form = selected_pos
+
+    orig_idx, selected_form = display_forms[selected_pos]
+
+    # תצוגה דו-עמודית: תמונה | שדות
+    col_img, col_fields = st.columns([1, 1])
+
+    # עמודה שמאל — תמונת הטופס המקורי
+    with col_img:
+        st.markdown("**📄 טופס מקורי**")
+        img_bytes = st.session_state.form_images.get(orig_idx)
+        if img_bytes:
+            st.image(img_bytes, use_column_width=True, caption=f"דף {selected_form.get('page', 1)}")
+        else:
+            st.info("תמונה לא זמינה לטופס זה")
+
+    # עמודה ימין — שדות מחולצים
+    with col_fields:
+        st.markdown("**📋 שדות שחולצו**")
+        _render_field_cards(selected_form, orig_idx, all_forms)
+
+
+def _render_field_cards(form: dict, form_idx: int, all_forms: list[dict]) -> None:
+    """
+    מציג כרטיס לכל שדה עם צבע לפי סטטוס ואפשרות עריכה.
+    """
+    for field_key, field_def in FIELDS.items():
+        field_data = form.get(field_key, {})
+        if not isinstance(field_data, dict):
+            field_data = {}
+
+        value      = field_data.get("value")
+        status     = field_data.get("status", FieldStatus.MISSING)
+        confidence = field_data.get("confidence", 0.0)
+
+        # ערך לתצוגה
+        if isinstance(value, list):
+            display_val = ", ".join(str(v) for v in value if v)
+        else:
+            display_val = str(value) if value is not None else ""
+
+        # CSS class לפי סטטוס
+        if status == FieldStatus.OK:
+            css_class = "field-ok"
+            icon = "✓"
+        elif status == FieldStatus.LOW:
+            css_class = "field-low"
+            icon = "⚠"
+        elif status == FieldStatus.MISSING:
+            css_class = "field-missing"
+            icon = "✗"
+        else:
+            css_class = "field-missing"
+            icon = "⚡"
+
+        col_name = field_def["excel_col"]
+
+        # תצוגת הכרטיס
+        st.markdown(
+            f'<div class="field-card {css_class}">'
+            f'<small>{icon} <b>{col_name}</b> '
+            f'<span style="color:#999;font-size:11px">({confidence:.0%})</span></small><br>'
+            f'{display_val if display_val else "<i style=\'color:#999\'>לא נמצא</i>"}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        # אם שדה לא תקין — מציגים תיבת עריכה
+        if status in (FieldStatus.LOW, FieldStatus.MISSING, FieldStatus.ERROR):
+            new_val = st.text_input(
+                label     = f"תיקון: {col_name}",
+                value     = display_val,
+                key       = f"fix_{form_idx}_{field_key}",
+                label_visibility = "collapsed",
+                placeholder = f"הכניסי ערך לשדה {col_name}...",
+            )
+            # אם שונה — מעדכנים
+            if new_val != display_val:
+                field_def_data = FIELDS[field_key]
+                if field_def_data["multi"]:
+                    updated_val: Any = [v.strip() for v in new_val.split(",") if v.strip()]
+                else:
+                    updated_val = new_val.strip() if new_val.strip() else None
+
+                all_forms[form_idx][field_key] = {
+                    "value":      updated_val,
+                    "confidence": 1.0,
+                    "status":     FieldStatus.OK,
+                }
+                st.session_state.forms = all_forms
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# טבלה לעריכה
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _render_editable_table(forms: list[dict]) -> list[dict]:
+    df, field_col_map = _forms_to_dataframe(forms)
+    column_config = _build_column_config(df.columns.tolist())
+
+    edited_df = st.data_editor(
+        df,
+        column_config    = column_config,
+        use_container_width = True,
+        hide_index       = True,
+        num_rows         = "fixed",
+        key              = "forms_editor",
+    )
+
     return _dataframe_to_forms(edited_df, forms, field_col_map)
 
 
 def _forms_to_dataframe(forms: list[dict]) -> tuple[pd.DataFrame, dict]:
-    """
-    ממיר רשימת forms ל-DataFrame לעריכה.
-
-    Returns:
-        (DataFrame, מיפוי שם_עמודה → field_key)
-    """
-    rows = []
-    field_col_map: dict[str, str] = {}  # excel_col → field_key
+    rows: list[dict] = []
+    field_col_map: dict[str, str] = {}
 
     for form in forms:
         row: dict[str, Any] = {
             "קובץ": form.get("source_file", ""),
             "דף":   form.get("page", 1),
         }
-
         for field_key, field_def in FIELDS.items():
             col_name = field_def["excel_col"]
             field_col_map[col_name] = field_key
 
             field_data = form.get(field_key, {})
-            # מגן מפני מקרה שהערך הוא string ולא dict (source_file, page וכד')
             if not isinstance(field_data, dict):
                 field_data = {}
-            value      = field_data.get("value")
-            status     = field_data.get("status", FieldStatus.MISSING)
 
-            # ערך לתצוגה
+            value  = field_data.get("value")
+            status = field_data.get("status", FieldStatus.MISSING)
+
             if isinstance(value, list):
                 display_val = ", ".join(str(v) for v in value if v)
             else:
                 display_val = str(value) if value is not None else ""
 
-            # עמודת ערך
             row[col_name] = display_val
-
-            # עמודת סטטוס (נסתרת מהעריכה, מוצגת בנפרד)
-            row[f"_status_{col_name}"] = status.value if isinstance(status, FieldStatus) else status
+            row[f"_status_{col_name}"] = status.value if isinstance(status, FieldStatus) else str(status)
 
         rows.append(row)
 
-    df = pd.DataFrame(rows)
-    return df, field_col_map
+    return pd.DataFrame(rows), field_col_map
 
 
 def _build_column_config(columns: list[str]) -> dict:
-    """בונה הגדרות עמודות לst.data_editor."""
     config = {
         "קובץ": st.column_config.TextColumn("קובץ מקור", disabled=True, width="medium"),
-        "דף":   st.column_config.NumberColumn("דף", disabled=True, width="small"),
+        "דף":   st.column_config.NumberColumn("דף",       disabled=True, width="small"),
     }
-
     for field_key, field_def in FIELDS.items():
         col_name = field_def["excel_col"]
         config[col_name] = st.column_config.TextColumn(
-            label    = col_name,
-            width    = "medium",
-            help     = f"ערוך ידנית אם נדרש תיקון",
+            label=col_name, width="medium", help="ערוך ידנית אם נדרש תיקון"
         )
-        # עמודות סטטוס — מוסתרות
         config[f"_status_{col_name}"] = st.column_config.Column(
-            label  = f"סטטוס {col_name}",
-            width  = "small",
+            label=f"סטטוס {col_name}", width="small"
         )
-
     return config
 
 
 def _dataframe_to_forms(
-    edited_df:    pd.DataFrame,
+    edited_df:      pd.DataFrame,
     original_forms: list[dict],
     field_col_map:  dict[str, str],
 ) -> list[dict]:
-    """
-    ממיר DataFrame ערוך חזרה לפורמט forms.
-    שדה שנערך ידנית מקבל confidence=1.0 ו-status=OK.
-    """
-    updated_forms: list[dict] = []
+    updated: list[dict] = []
 
     for row_idx, row in edited_df.iterrows():
         if row_idx >= len(original_forms):
             break
-
         orig = original_forms[row_idx].copy()
 
         for col_name, field_key in field_col_map.items():
             if col_name not in row:
                 continue
-
             new_val_str = str(row[col_name]).strip() if pd.notna(row[col_name]) else ""
 
-            field_def    = FIELDS[field_key]
             orig_data    = orig.get(field_key, {})
-            orig_val_raw = orig_data.get("value")
+            orig_val_raw = orig_data.get("value") if isinstance(orig_data, dict) else None
 
-            # ממיר ערך מקורי לתצוגה לשם השוואה
             if isinstance(orig_val_raw, list):
                 orig_display = ", ".join(str(v) for v in orig_val_raw if v)
             else:
                 orig_display = str(orig_val_raw) if orig_val_raw is not None else ""
 
-            # אם המשתמש שינה — מעדכן confidence ל-1.0 ו-status ל-OK
             if new_val_str != orig_display:
-                # ממיר חזרה לרשימה אם שדה multi
+                field_def = FIELDS[field_key]
                 if field_def["multi"]:
                     new_val: Any = [v.strip() for v in new_val_str.split(",") if v.strip()]
                 else:
@@ -479,30 +644,9 @@ def _dataframe_to_forms(
                     "status":     FieldStatus.OK,
                 }
 
-        updated_forms.append(orig)
+        updated.append(orig)
 
-    return updated_forms
-
-
-def _render_status_legend_inline(forms: list[dict]) -> None:
-    """מציג מפת סטטוסים לכל טופס בצורה קומפקטית."""
-    with st.expander("📊 סטטוס מפורט לכל טופס", expanded=False):
-        for i, form in enumerate(forms):
-            issues = count_issues(form)
-            src    = form.get("source_file", f"טופס {i+1}")
-            page   = form.get("page", 1)
-            low    = issues.get("low", 0)
-            miss   = issues.get("missing", 0)
-
-            if low == 0 and miss == 0:
-                st.markdown(f"✅ **{src}** דף {page} — תקין")
-            else:
-                parts = []
-                if low > 0:
-                    parts.append(f"⚠️ {low} לא-בטוחים")
-                if miss > 0:
-                    parts.append(f"❌ {miss} חסרים")
-                st.markdown(f"**{src}** דף {page} — {', '.join(parts)}")
+    return updated
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -510,14 +654,20 @@ def _render_status_legend_inline(forms: list[dict]) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _render_export_section(forms: list[dict]) -> None:
-    """מציג את כפתור הייצוא והורדת הקובץ."""
     st.subheader("📥 ייצוא לאקסל")
-
     col1, col2 = st.columns([1, 2])
 
     with col1:
         if st.button("📊 צור קובץ אקסל", type="primary", use_container_width=True):
-            _generate_excel(forms)
+            try:
+                with st.spinner("יוצר קובץ אקסל..."):
+                    output_path = export_to_excel(forms)
+                with open(output_path, "rb") as f:
+                    st.session_state.excel_bytes    = f.read()
+                    st.session_state.excel_filename = output_path.name
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ שגיאה ביצירת האקסל: {e}")
 
     with col2:
         if st.session_state.excel_bytes:
@@ -526,62 +676,34 @@ def _render_export_section(forms: list[dict]) -> None:
                 data      = st.session_state.excel_bytes,
                 file_name = st.session_state.excel_filename,
                 mime      = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
+                use_container_width = True,
             )
             st.success(f"✓ קובץ מוכן: **{st.session_state.excel_filename}**")
 
 
-def _generate_excel(forms: list[dict]) -> None:
-    """
-    מריץ את export_to_excel ושומר את התוצאה ב-session_state.
-    """
-    try:
-        with st.spinner("יוצר קובץ אקסל..."):
-            output_path = export_to_excel(forms)
-
-        # קריאת הקובץ לזיכרון לכפתור הורדה
-        with open(output_path, "rb") as f:
-            st.session_state.excel_bytes    = f.read()
-            st.session_state.excel_filename = output_path.name
-
-        st.rerun()
-
-    except Exception as e:
-        st.error(f"❌ שגיאה ביצירת האקסל: {e}")
-        logger.error(f"שגיאת ייצוא: {e}", exc_info=True)
-
-
 # ─────────────────────────────────────────────────────────────────────────────
-# פונקציות עזר לסטטוס
+# עזר
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _form_all_ok(form: dict) -> bool:
-    """מחזיר True אם כל השדות בטופס תקינים."""
     for field_key in FIELDS:
         field_data = form.get(field_key)
         if not isinstance(field_data, dict):
             return False
-        status = field_data.get("status")
-        if status != FieldStatus.OK:
+        if field_data.get("status") != FieldStatus.OK:
             return False
     return True
 
 
 def _form_has_status(form: dict, target: FieldStatus) -> bool:
-    """מחזיר True אם לפחות שדה אחד בטופס הוא בסטטוס הנתון."""
     for field_key in FIELDS:
         field_data = form.get(field_key)
         if not isinstance(field_data, dict):
             continue
-        status = field_data.get("status")
-        if status == target:
+        if field_data.get("status") == target:
             return True
     return False
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# הרצה
-# ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     main()
