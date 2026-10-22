@@ -1,16 +1,9 @@
 """
 app/vision_extractor.py
 -----------------------
-שולח תמונת טופס ל-Gemini Flash ומחזיר JSON מובנה עם השדות.
+שולח תמונת טופס ל-GPT-4o Vision ומחזיר JSON מובנה עם השדות.
 
-מודל: gemini-2.0-flash — חינמי עד 1,500 requests/day
-מפתח: GOOGLE_API_KEY ב-.env או ב-Streamlit Secrets
-
-עקרונות:
-- מנסה עד MAX_RETRIES פעמים אם המודל מחזיר JSON פגום
-- לא מלוגג תוכן תשובות (פרטיות)
-- שדה לא נמצא → null, לא ניחוש
-- confidence לכל שדה בנפרד
+מפתח: OPENAI_API_KEY ב-.env או ב-Streamlit Secrets
 """
 
 from __future__ import annotations
@@ -23,20 +16,20 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
+from openai import OpenAI, RateLimitError, APIError
 
 from config.fields import FIELDS
 from config.prompts import EXTRACTION_PROMPT, RETRY_PROMPT
 from utils.logger import get_logger
 
-# טוען .env מתיקיית שורש הפרויקט
 _PROJECT_ROOT = Path(__file__).parent.parent
 load_dotenv(_PROJECT_ROOT / ".env")
 
 logger = get_logger(__name__)
 
-MAX_RETRIES          = 3
-RETRY_DELAY_SECONDS  = 2
-MODEL                = "gemini-2.0-flash"
+MAX_RETRIES         = 3
+RETRY_DELAY_SECONDS = 2
+MODEL               = "gpt-4o"
 
 ExtractionResult = dict[str, dict[str, Any]]
 
@@ -51,83 +44,63 @@ def build_empty_result() -> ExtractionResult:
 
 
 def extract_from_image(base64_image: str) -> ExtractionResult:
-    """
-    שולח תמונה ב-base64 ל-Gemini Flash ומחזיר שדות מחולצים.
-
-    Args:
-        base64_image: תמונת הטופס מקודדת ב-base64 (JPEG)
-
-    Returns:
-        מילון: { שם_שדה: { "value": ..., "confidence": float } }
-    """
-    api_key = os.getenv("GOOGLE_API_KEY")
+    """שולח תמונה ל-GPT-4o Vision ומחזיר שדות מחולצים."""
+    api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise EnvironmentError(
-            "GOOGLE_API_KEY לא מוגדר. "
-            "הוסיפי GOOGLE_API_KEY=AI... לקובץ .env"
+            "OPENAI_API_KEY לא מוגדר. "
+            "הוסיפי OPENAI_API_KEY=sk-... לקובץ .env"
         )
 
-    try:
-        import google.generativeai as genai
-    except ImportError:
-        raise ImportError(
-            "חבילת google-generativeai לא מותקנת. "
-            "הריצי: pip install google-generativeai"
-        )
-
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(MODEL)
-
+    client = OpenAI(api_key=api_key)
     prompts_to_try = [EXTRACTION_PROMPT, RETRY_PROMPT, RETRY_PROMPT]
     last_error: Exception | None = None
 
     for attempt in range(MAX_RETRIES):
         prompt = prompts_to_try[min(attempt, len(prompts_to_try) - 1)]
-
         try:
-            logger.info(f"שולח תמונה ל-Gemini Flash (ניסיון {attempt + 1}/{MAX_RETRIES})")
+            logger.info(f"שולח תמונה ל-GPT-4o (ניסיון {attempt + 1}/{MAX_RETRIES})")
 
-            # בניית ה-parts: פרומפט + תמונה
-            import base64 as _b64
-            image_bytes = _b64.b64decode(base64_image)
-
-            response = model.generate_content(
-                contents=[
-                    prompt,
-                    {
-                        "mime_type": "image/jpeg",
-                        "data":      image_bytes,
-                    },
-                ],
-                generation_config=genai.GenerationConfig(
-                    temperature       = 0,      # דטרמיניסטי
-                    max_output_tokens = 1024,
-                ),
+            response = client.chat.completions.create(
+                model      = MODEL,
+                max_tokens = 1024,
+                temperature= 0,
+                messages   = [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {
+                            "url":    f"data:image/jpeg;base64,{base64_image}",
+                            "detail": "high",
+                        }},
+                    ],
+                }],
             )
 
-            raw_text = response.text or ""
-            logger.debug("תשובה התקבלה מ-Gemini")
-
-            parsed = _parse_json_response(raw_text)
+            raw_text = response.choices[0].message.content or ""
+            parsed   = _parse_json_response(raw_text)
             if parsed is not None:
-                validated = _validate_and_fill(parsed)
                 logger.info("חילוץ הושלם בהצלחה")
-                return validated
+                return _validate_and_fill(parsed)
 
             logger.warning(f"ניסיון {attempt + 1}: JSON לא תקין — מנסה שוב")
             last_error = ValueError(f"JSON פגום בניסיון {attempt + 1}")
 
-        except Exception as e:
-            error_str = str(e).lower()
-            # rate limit של Gemini
-            if "quota" in error_str or "rate" in error_str or "429" in error_str:
-                wait = RETRY_DELAY_SECONDS * (attempt + 1) * 3
-                logger.warning(f"Rate limit — ממתין {wait} שניות")
-                time.sleep(wait)
-            else:
-                logger.error(f"שגיאה בניסיון {attempt + 1}: {e}")
-                time.sleep(RETRY_DELAY_SECONDS * (attempt + 1))
+        except RateLimitError:
+            wait = RETRY_DELAY_SECONDS * (attempt + 1) * 2
+            logger.warning(f"Rate limit — ממתין {wait} שניות")
+            time.sleep(wait)
+            last_error = RateLimitError
+
+        except APIError as e:
+            logger.error(f"שגיאת API בניסיון {attempt + 1}: {e}")
             last_error = e
+            time.sleep(RETRY_DELAY_SECONDS * (attempt + 1))
+
+        except Exception as e:
+            logger.error(f"שגיאה לא צפויה: {e}")
+            last_error = e
+            time.sleep(RETRY_DELAY_SECONDS)
 
     logger.error(f"כל {MAX_RETRIES} הניסיונות נכשלו: {last_error}")
     empty = build_empty_result()
