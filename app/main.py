@@ -654,11 +654,11 @@ def _render_field_cards(form: dict, form_idx: int, all_forms: list[dict]) -> Non
         # אם שדה לא תקין — מציגים תיבת עריכה
         if status in (FieldStatus.LOW, FieldStatus.MISSING, FieldStatus.ERROR):
             new_val = st.text_input(
-                label     = f"תיקון: {col_name}",
+                label     = f"✏️ תיקון: {col_name}",
                 value     = display_val,
                 key       = f"fix_{form_idx}_{field_key}",
-                label_visibility = "collapsed",
                 placeholder = f"הכניסי ערך לשדה {col_name}...",
+                help      = f"ערוך את השדה {col_name} ידנית",
             )
             # אם שונה — מעדכנים
             if new_val != display_val:
