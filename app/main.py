@@ -50,39 +50,192 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .main, .stApp, .block-container { direction: rtl; text-align: right; }
-    h1, h2, h3, h4 { font-family: 'Segoe UI', Arial, sans-serif; }
-    .status-ok      { background-color: #d4edda; padding: 4px 8px; border-radius: 4px; }
-    .status-low     { background-color: #fff3cd; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-    .status-missing { background-color: #f8d7da; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-    .status-error   { background-color: #e2e3e5; padding: 4px 8px; border-radius: 4px; }
+    @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600&display=swap');
+
+    /* ── איפוס בסיסי ── */
+    html, body, .main, .stApp, .block-container {
+        direction: rtl;
+        text-align: right;
+        font-family: 'Heebo', 'Segoe UI', Arial, sans-serif;
+        background-color: #ffffff;
+        color: #1c2b3a;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    /* ── כותרות ── */
+    h1 {
+        font-size: 20px;
+        font-weight: 600;
+        color: #1c2b3a;
+        letter-spacing: 0;
+        margin-bottom: 2px;
+    }
+    h2 { font-size: 15px; font-weight: 600; color: #1c2b3a; }
+    h3 { font-size: 13px; font-weight: 600; color: #3a4f63; text-transform: uppercase; letter-spacing: 0.5px; }
+    p, .stMarkdown p { color: #4a5f72; font-size: 13px; }
+
+    /* ── סרגל צד ── */
+    [data-testid="stSidebar"] {
+        background-color: #f4f6f8;
+        border-left: 1px solid #dde3e9;
+    }
+    [data-testid="stSidebar"] * { color: #1c2b3a !important; }
+    [data-testid="stSidebar"] .stButton > button {
+        background: white !important;
+        color: #1c2b3a !important;
+        border: 1px solid #c8d2dc !important;
+        border-radius: 4px !important;
+        font-size: 13px !important;
+        font-weight: 400 !important;
+    }
+    [data-testid="stSidebar"] .stButton > button:hover {
+        border-color: #1c4e80 !important;
+        color: #1c4e80 !important;
+    }
+
+    /* ── כפתורים ── */
+    .stButton > button {
+        border-radius: 4px !important;
+        font-family: 'Heebo', sans-serif !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        padding: 6px 16px !important;
+        transition: background 0.15s, border-color 0.15s !important;
+    }
+    .stButton > button[kind="primary"] {
+        background: #1c4e80 !important;
+        border: 1px solid #1c4e80 !important;
+        color: white !important;
+        box-shadow: none !important;
+    }
+    .stButton > button[kind="primary"]:hover {
+        background: #163d63 !important;
+        border-color: #163d63 !important;
+    }
+    .stButton > button[kind="secondary"] {
+        background: white !important;
+        border: 1px solid #c8d2dc !important;
+        color: #1c2b3a !important;
+    }
+    .stButton > button[kind="secondary"]:hover {
+        border-color: #1c4e80 !important;
+        color: #1c4e80 !important;
+    }
+
+    /* ── כפתור הורדה ── */
+    .stDownloadButton > button {
+        background: #1c6b45 !important;
+        color: white !important;
+        border: 1px solid #1c6b45 !important;
+        border-radius: 4px !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        box-shadow: none !important;
+    }
+    .stDownloadButton > button:hover {
+        background: #155436 !important;
+        border-color: #155436 !important;
+    }
+
+    /* ── באנר סיכום ── */
     .summary-banner {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 16px 24px;
-        border-radius: 12px;
-        font-size: 18px;
-        font-weight: bold;
+        background: #f4f6f8;
+        color: #1c2b3a;
+        padding: 14px 20px;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: 500;
         text-align: center;
-        margin: 12px 0;
+        margin: 8px 0;
         direction: rtl;
+        border: 1px solid #dde3e9;
+        border-right: 4px solid #1c4e80;
     }
-    .form-preview-container {
-        border: 2px solid #dee2e6;
-        border-radius: 8px;
-        padding: 8px;
-        background: #f8f9fa;
+
+    /* ── מטריקות ── */
+    [data-testid="stMetric"] {
+        background: #f9fafb;
+        border-radius: 4px;
+        padding: 12px 16px !important;
+        border: 1px solid #dde3e9;
     }
+    [data-testid="stMetricValue"] {
+        color: #1c2b3a;
+        font-size: 24px !important;
+        font-weight: 600 !important;
+    }
+    [data-testid="stMetricLabel"] {
+        color: #6b7f90;
+        font-size: 12px !important;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+
+    /* ── כרטיסי שדות ── */
     .field-card {
-        border-right: 4px solid #dee2e6;
-        padding: 6px 12px;
-        margin: 4px 0;
-        border-radius: 0 6px 6px 0;
+        border-right: 3px solid #dde3e9;
+        padding: 7px 12px;
+        margin: 3px 0;
+        border-radius: 0 4px 4px 0;
         direction: rtl;
+        background: #fafbfc;
+        border-top: 1px solid #eef1f4;
+        border-bottom: 1px solid #eef1f4;
+        border-left: none;
     }
-    .field-ok      { border-right-color: #28a745; background: #f0fff4; }
-    .field-low     { border-right-color: #ffc107; background: #fffdf0; }
-    .field-missing { border-right-color: #dc3545; background: #fff5f5; }
+    .field-ok      { border-right-color: #2e7d52; background: #fafcfb; }
+    .field-low     { border-right-color: #b06a00; background: #fdfaf5; }
+    .field-missing { border-right-color: #a93226; background: #fdf9f9; }
+
+    /* ── תגיות סטטוס ── */
+    .status-ok      { color: #2e7d52; font-size: 12px; font-weight: 500; }
+    .status-low     { color: #b06a00; font-size: 12px; font-weight: 500; }
+    .status-missing { color: #a93226; font-size: 12px; font-weight: 500; }
+    .status-error   { color: #6b7f90; font-size: 12px; font-weight: 500; }
+
+    /* ── expander ── */
+    [data-testid="stExpander"] {
+        border: 1px solid #dde3e9 !important;
+        border-radius: 4px !important;
+        background: white !important;
+    }
+
+    /* ── divider ── */
+    hr { border-color: #eef1f4 !important; margin: 16px 0 !important; }
+
+    /* ── file uploader ── */
+    [data-testid="stFileUploader"] {
+        background: #fafbfc;
+        border: 1px dashed #c8d2dc;
+        border-radius: 4px;
+        padding: 4px;
+    }
+
+    /* ── data editor ── */
+    [data-testid="stDataFrame"] {
+        border: 1px solid #dde3e9 !important;
+        border-radius: 4px !important;
+    }
+
+    /* ── selectbox / input ── */
+    .stSelectbox > div > div,
+    .stTextInput > div > div {
+        border-radius: 4px !important;
+        border-color: #c8d2dc !important;
+        font-size: 13px !important;
+    }
+
+    /* ── progress bar ── */
+    .stProgress > div > div { background-color: #1c4e80 !important; }
+
+    /* ── success / warning / error ── */
+    .stSuccess { background: #f0f7f2 !important; border: 1px solid #c3dece !important; border-radius: 4px !important; color: #1c5233 !important; }
+    .stWarning { background: #fdf6ec !important; border: 1px solid #f0d9ae !important; border-radius: 4px !important; color: #7d4e0a !important; }
+    .stError   { background: #fdf2f1 !important; border: 1px solid #f0c5c1 !important; border-radius: 4px !important; color: #7d1f1a !important; }
+
+    /* ── caption ── */
+    .stCaption { color: #8a9ab0 !important; font-size: 12px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -115,8 +268,8 @@ def _init_state() -> None:
 def main() -> None:
     _init_state()
 
-    st.title("🧪 מטפסי התחייבות לאקסל")
-    st.caption("מנוע חילוץ אוטומטי — המעבדה המרכזית לנגיפים | האקתון AI קוד פתוח 2026")
+    st.title("מטפסי התחייבות לאקסל")
+    st.caption("מנוע חילוץ אוטומטי | המעבדה המרכזית לנגיפים | משרד הבריאות")
     st.divider()
 
     _render_sidebar()
@@ -133,7 +286,7 @@ def main() -> None:
 
 def _render_sidebar() -> None:
     with st.sidebar:
-        st.header("⚙️ הגדרות")
+        st.header("הגדרות")
 
         api_key = os.getenv("OPENAI_API_KEY", "")
         if api_key and api_key.startswith("sk-"):
@@ -145,7 +298,7 @@ def _render_sidebar() -> None:
         st.divider()
 
         if st.session_state.forms:
-            if st.button("🔄 טפסים חדשים", use_container_width=True):
+            if st.button("טפסים חדשים", use_container_width=True):
                 for key in ["forms", "form_images", "excel_bytes",
                             "excel_filename", "error_msg", "processing_time"]:
                     st.session_state[key] = {} if key == "form_images" else \
@@ -160,10 +313,10 @@ def _render_sidebar() -> None:
 
         st.subheader("מקרא")
         st.markdown("""
-        <div class="status-ok">✓ תקין — ביטחון גבוה</div><br>
-        <div class="status-low">⚠ לא בטוח — בדקי</div><br>
-        <div class="status-missing">✗ חסר — לא נמצא</div><br>
-        <div class="status-error">⚡ שגיאה טכנית</div>
+        <span class="status-ok">תקין</span><br><br>
+        <span class="status-low">לא בטוח — בדקי</span><br><br>
+        <span class="status-missing">חסר — לא נמצא</span><br><br>
+        <span class="status-error">שגיאה טכנית</span>
         """, unsafe_allow_html=True)
 
         st.divider()
@@ -178,7 +331,7 @@ def _render_upload_section() -> None:
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        st.subheader("📂 העלאת טפסים")
+        st.subheader("העלאת טפסים")
         uploaded_files = st.file_uploader(
             label="גרור טפסים לכאן או לחץ לבחירה",
             type=["pdf", "jpg", "jpeg", "png", "tiff", "bmp"],
@@ -187,7 +340,7 @@ def _render_upload_section() -> None:
         )
 
     with col2:
-        st.subheader("ℹ️ מה נחלץ")
+        st.subheader("שדות לחילוץ")
         for field_key, field_def in FIELDS.items():
             multi_mark = " (כמה)" if field_def["multi"] else ""
             req_mark   = " *"     if field_def["required"] else ""
@@ -199,7 +352,7 @@ def _render_upload_section() -> None:
 
     if uploaded_files:
         st.info(f"נבחרו **{len(uploaded_files)}** קבצים")
-        if st.button("▶ עבד טפסים", type="primary", use_container_width=True,
+        if st.button("עבד טפסים", type="primary", use_container_width=True,
                      disabled=st.session_state.processing):
             _run_processing(uploaded_files)
     else:
@@ -315,13 +468,13 @@ def _render_results_section() -> None:
     # ── 2. מצב בדיקה מהירה / תצוגה מלאה ─────────────────────────────────
     col_mode1, col_mode2, col_mode3 = st.columns([1, 1, 2])
     with col_mode1:
-        if st.button("⚠️ בדיקה מהירה — רק בעיות",
+        if st.button("בדיקה מהירה — רק בעיות",
                      type="primary" if st.session_state.quick_review else "secondary",
                      use_container_width=True):
             st.session_state.quick_review = True
             st.rerun()
     with col_mode2:
-        if st.button("📋 הצג הכל",
+        if st.button("הצג הכל",
                      type="primary" if not st.session_state.quick_review else "secondary",
                      use_container_width=True):
             st.session_state.quick_review = False
@@ -379,14 +532,14 @@ def _render_processing_summary(forms: list[dict]) -> None:
     # בניית משפט סיכום
     issues = low_count + miss_count
     if issues == 0:
-        status_text = "✅ כולם תקינים"
+        status_text = "כולם תקינים"
     else:
         parts = []
         if low_count > 0:
             parts.append(f"{low_count} דורשים בדיקה")
         if miss_count > 0:
             parts.append(f"{miss_count} עם שדות חסרים")
-        status_text = "⚠️ " + ", ".join(parts)
+        status_text = ", ".join(parts)
 
     # פורמט זמן
     if elapsed < 60:
@@ -407,10 +560,10 @@ def _render_processing_summary(forms: list[dict]) -> None:
 
     # מטריקות מהירות
     cols = st.columns(4)
-    cols[0].metric("📄 סה\"כ טפסים",     total)
-    cols[1].metric("✅ תקינים לחלוטין",  ok_count)
-    cols[2].metric("⚠️ דורשים בדיקה",   low_count)
-    cols[3].metric("❌ שדות חסרים",      miss_count)
+    cols[0].metric("סה\"כ טפסים",       total)
+    cols[1].metric("תקינים לחלוטין",    ok_count)
+    cols[2].metric("דורשים בדיקה",      low_count)
+    cols[3].metric("שדות חסרים",        miss_count)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -424,7 +577,7 @@ def _render_form_with_preview(
     """
     מציג בורר טפסים + תמונת הטופס המקורי לצד השדות שחולצו.
     """
-    st.subheader("🔍 צפייה בטופס לצד השדות")
+    st.subheader("צפייה בטופס לצד השדות")
 
     # בורר טופס
     form_labels = []
@@ -433,7 +586,7 @@ def _render_form_with_preview(
         page  = form.get("page", 1)
         issues = count_issues(form)
         has_issue = issues.get("low", 0) + issues.get("missing", 0) > 0
-        icon  = "⚠️" if has_issue else "✅"
+        icon  = "!" if has_issue else ""
         # קצר את שם הקובץ
         short_name = src[:30] + "..." if len(src) > 30 else src
         form_labels.append(f"{icon} דף {page} — {short_name}")
