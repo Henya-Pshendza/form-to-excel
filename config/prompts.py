@@ -37,72 +37,62 @@ Do not interpret yet — just transcribe everything you see.
 # STEP 2 — Extract structured fields from the transcribed text
 # ─────────────────────────────────────────────────────────────────────────────
 
-STEP2_EXTRACT_PROMPT = f"""You are a data extraction engine for Israeli medical commitment forms.
+STEP2_EXTRACT_PROMPT = f"""Extract 7 fields from this Israeli medical commitment form text.
 
-You will receive a text transcription of a medical form.
-Extract the following 7 fields and return ONLY valid JSON.
+IMPORTANT RULES:
+• ONLY extract data that clearly exists in the text
+• If unsure, set lower confidence (0.50-0.70) rather than null
+• Handwritten text may be unclear - try your best and mark lower confidence
+• Multiple values for מרכזי/התחייבות → return all in a list
 
-═══════════════════════════════════════════════
-CRITICAL: NEVER invent data. If not found → null.
-A blank field is better than a wrong value.
-═══════════════════════════════════════════════
+FIELDS TO EXTRACT:
 
-FIELDS:
+1. שם_פרטי — Patient's FIRST name
+   Labels: "שם פרטי", "שם", "מנוי", "לכבוד", "שם החולה"
+   Often handwritten in Hebrew near top of form
+   
+2. שם_משפחה — Patient's FAMILY name
+   Usually next to first name
+   Often handwritten
+   
+3. תעודת_זהות — Israeli ID (8-9 digits)
+   Labels: "ת.ז.", "מספר זהות", "ת.ז"
+   Must be digits only, NOT a date
+   
+4. מספר_מרכזי — Lab central number(s) [list]
+   On sticker or handwritten near word "מרכזי"
+   Return ALL numbers found as list
+   
+5. תאריך_קבלה — Received date
+   Inside "התקבל"/"נתקבל" stamp, format: DD/MM/YYYY
+   NOT form date, NOT birth date
+   
+6. גורם_שולח — Sending organization
+   Organization name in header/logo area
+   Options: {_SENDERS_LIST}
+   
+7. מספר_התחייבות — Commitment number(s) [list]
+   Labels: "מספר התחייבות", "התחייבות", "דרישה", "דגימה", "מס'"
+   Return ALL numbers found as list
 
-1. שם_פרטי (patient first name)
-   - The PATIENT's first name
-   - May appear next to labels: "שם פרטי", "שם", "מנוי", "מעבדה/מנוי", "לכבוד", "שם החולה"
-   - In Wolfson/hospital forms: handwritten in Hebrew next to the word "שם" near the top
-   - Look carefully for handwritten Hebrew text — it may be unclear
-   - Hebrew name, 1-3 words
-   - null if confidence < 0.85
+CONFIDENCE GUIDE:
+• 0.90-1.00 = Crystal clear, printed text
+• 0.70-0.89 = Clear but handwritten or slightly unclear
+• 0.50-0.69 = Visible but hard to read, best guess
+• Below 0.50 = Too unclear, use null
 
-2. שם_משפחה (patient family name)
-   - The PATIENT's family/last name
-   - Usually appears next to the first name
-   - In Wolfson hospital forms: handwritten next to "שם" label at top of form
-   - null if confidence < 0.85
-
-3. תעודת_זהות (Israeli ID number)
-   - 8-9 digits only
-   - Labeled: "ת.ז.", "מספר זהות", "ת.ז"
-   - NOT a date, NOT a phone number
-   - null if not clearly an ID number
-
-4. מספר_מרכזי (central lab number — return as list)
-   - Number on a sticker labeled "מרכזי" nearby
-   - Or handwritten next to word "מרכזי"
-   - Multiple values possible — return ALL as list
-   - [] if not found
-
-5. תאריך_קבלה (received date)
-   - Date INSIDE a stamp that says "התקבל" / "נתקבל"
-   - OR a handwritten date added later (not pre-printed)
-   - Format: DD/MM/YYYY
-   - NOT the form date, NOT birth date, NOT test date
-   - null if no received stamp found
-
-6. גורם_שולח (sending organization)
-   - Organization name at the TOP of the form (header/logo area)
-   - Must match one of: {_SENDERS_LIST}
-   - null if unclear
-
-7. מספר_התחייבות (commitment number — return as list)
-   - Number next to label: "מספר התחייבות", "התחייבות", "דרישה", "דגימה", "מס'"
-   - OR number on barcode sticker labeled "התחייבות"/"דרישה"
-   - Multiple values possible — return ALL as list
-   - [] if not found
-
-Return ONLY this JSON (no markdown, no explanation):
+OUTPUT FORMAT (valid JSON only, no markdown):
 {{
-  "שם_פרטי":          {{"value": "ישראל",        "confidence": 0.95}},
-  "שם_משפחה":         {{"value": "ישראלי",       "confidence": 0.95}},
-  "תעודת_זהות":       {{"value": "123456789",    "confidence": 0.90}},
-  "מספר_מרכזי":       {{"value": ["2344936"],    "confidence": 0.85}},
+  "שם_פרטי":          {{"value": "דוד",          "confidence": 0.75}},
+  "שם_משפחה":         {{"value": "כהן",          "confidence": 0.75}},
+  "תעודת_זהות":       {{"value": "123456789",    "confidence": 0.85}},
+  "מספר_מרכזי":       {{"value": ["2344936"],    "confidence": 0.80}},
   "תאריך_קבלה":       {{"value": "21/08/2026",   "confidence": 0.90}},
   "גורם_שולח":        {{"value": "כללית",        "confidence": 0.95}},
-  "מספר_התחייבות":    {{"value": ["4034345113"], "confidence": 0.85}}
+  "מספר_התחייבות":    {{"value": ["4034345113"], "confidence": 0.80}}
 }}
+
+If field not found: use null (not list fields use [])
 """
 
 # ─────────────────────────────────────────────────────────────────────────────

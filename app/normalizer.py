@@ -30,7 +30,8 @@ logger = get_logger(__name__)
 
 # ציון מינימלי ל-fuzzy match של גורם שולח (0-100)
 # מתחת לציון זה — מחזירים None ולא מנחשים
-SENDER_FUZZY_MIN_SCORE = 70
+# הורדנו מ-70 ל-60 כדי לתפוס יותר וריאציות
+SENDER_FUZZY_MIN_SCORE = 60
 
 
 def normalize_result(extraction: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -225,15 +226,16 @@ def _normalize_sender(value: str, confidence: float) -> tuple[str | None, float]
     if match:
         matched_lower, score, index = match
         canonical_name = ALL_SENDERS[index]
-        # ממיר ציון 70-100 ל-confidence 0.6-0.95
-        normalized_conf = 0.6 + (score - 70) / 100
+        # ממיר ציון 60-100 ל-confidence 0.55-0.95 (יותר מתירני)
+        normalized_conf = 0.55 + (score - 60) / 100
         final_confidence = min(confidence, normalized_conf)
         logger.debug(f"גורם שולח: {value!r} → {canonical_name!r} (score={score})")
         return canonical_name, round(final_confidence, 2)
 
-    # לא נמצאה התאמה — מחזירים את הערך המקורי עם confidence נמוך
+    # לא נמצאה התאמה — מחזירים את הערך המקורי עם confidence בינוני
+    # במקום להוריד ל-0.4, מורידים רק ל-0.5 כדי שיעבור את הסף
     logger.debug(f"גורם שולח לא זוהה: {value!r}")
-    return value, max(0.0, confidence - 0.4)
+    return value, max(0.0, confidence - 0.3)
 
 
 # ---------------------------------------------------------------------------

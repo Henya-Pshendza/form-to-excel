@@ -1,19 +1,13 @@
 """
 app/vision_extractor.py
 -----------------------
-שולח תמונת טופס ל-Claude claude-3-5-sonnet (Anthropic) ומחזיר JSON מובנה.
-
-מפתח: ANTHROPIC_API_KEY ב-.env או ב-Streamlit Secrets
-
-Two-step extraction:
-  Step 1 — Claude קורא את כל הטקסט מהתמונה (OCR pass)
-  Step 2 — Claude מחלץ שדות מובנים מהטקסט הגולמי
+Two-step extraction with GPT-4o:
+  Step 1 — reads all text from the image
+  Step 2 — extracts structured fields from the raw text
 """
 
 from __future__ import annotations
 
-import base64
-import io
 import json
 import os
 import re
@@ -22,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
+from openai import OpenAI, RateLimitError
 
 from config.fields import FIELDS
 from config.prompts import STEP1_READ_PROMPT, STEP2_EXTRACT_PROMPT, RETRY_PROMPT
@@ -34,192 +29,154 @@ logger = get_logger(__name__)
 
 MAX_RETRIES         = 3
 RETRY_DELAY_SECONDS = 2
-MODEL               = "claude-3-5-sonnet-20241022"
+MODEL               = "gpt-4o"
 
 ExtractionResult = dict[str, dict[str, Any]]
 
 
 def build_empty_result() -> ExtractionResult:
-    """מחזיר תוצאה ריקה — כל השדות null עם confidence=0.0."""
     result: ExtractionResult = {}
     for field_key, field_def in FIELDS.items():
-        empty_value: Any = [] if field_def["multi"] else None
-        result[field_key] = {"value": empty_value, "confidence": 0.0}
+        result[field_key] = {
+            "value":      [] if field_def["multi"] else None,
+            "confidence": 0.0,
+        }
     return result
 
 
 def extract_from_image(base64_image: str) -> ExtractionResult:
-    """
-    Two-step extraction עם Claude:
-    Step 1 — קריאת כל הטקסט מהתמונה
-    Step 2 — חילוץ שדות מובנים מהטקסט
-    """
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise EnvironmentError(
-            "ANTHROPIC_API_KEY לא מוגדר. "
-            "הוסיפי ANTHROPIC_API_KEY=sk-ant-... לקובץ .env"
-        )
+        raise EnvironmentError("OPENAI_API_KEY לא מוגדר")
 
-    try:
-        import anthropic
-    except ImportError:
-        raise ImportError(
-            "חבילת anthropic לא מותקנת. "
-            "הריצי: pip install anthropic"
-        )
-
-    client = anthropic.Anthropic(api_key=api_key)
+    client = OpenAI(api_key=api_key)
 
     # שלב 1: קריאת כל הטקסט
-    raw_text = _step1_read_image(client, base64_image)
+    raw_text = _step1_read(client, base64_image)
     if not raw_text:
         logger.warning("שלב 1 נכשל — עובר לחילוץ ישיר")
-        return _step2_extract_direct(client, base64_image)
+        return _extract_direct(client, base64_image)
 
     # שלב 2: חילוץ שדות מהטקסט
-    return _step2_extract_from_text(client, raw_text)
+    return _step2_extract(client, raw_text)
 
 
-def _step1_read_image(client, base64_image: str) -> str | None:
-    """שלב 1: Claude קורא את כל הטקסט הגלוי בתמונה."""
+def _step1_read(client: OpenAI, base64_image: str) -> str | None:
+    """שלב 1: קריאת כל הטקסט מהתמונה."""
     try:
-        logger.info("שלב 1 — קריאת טקסט מהתמונה (Claude)")
-
-        message = client.messages.create(
+        logger.info("שלב 1 — קריאת טקסט")
+        response = client.chat.completions.create(
             model      = MODEL,
             max_tokens = 2000,
+            temperature= 0.1,  # מעט יצירתיות לקריאת כתב יד
+            top_p      = 0.9,
             messages   = [{
                 "role": "user",
                 "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type":       "base64",
-                            "media_type": "image/jpeg",
-                            "data":       base64_image,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": STEP1_READ_PROMPT,
-                    },
+                    {"type": "text", "text": STEP1_READ_PROMPT},
+                    {"type": "image_url", "image_url": {
+                        "url":    f"data:image/jpeg;base64,{base64_image}",
+                        "detail": "high",
+                    }},
                 ],
             }],
         )
-
-        text = message.content[0].text if message.content else ""
-        logger.info(f"שלב 1 הושלם — {len(text)} תווים נקראו")
+        text = response.choices[0].message.content or ""
+        logger.info(f"שלב 1 הושלם — {len(text)} תווים")
         return text
-
     except Exception as e:
         logger.error(f"שגיאה בשלב 1: {e}")
         return None
 
 
-def _step2_extract_from_text(client, raw_text: str) -> ExtractionResult:
-    """שלב 2: חילוץ שדות מובנים מהטקסט הגולמי."""
-    prompts_to_try = [STEP2_EXTRACT_PROMPT, RETRY_PROMPT, RETRY_PROMPT]
+def _step2_extract(client: OpenAI, raw_text: str) -> ExtractionResult:
+    """שלב 2: חילוץ שדות מהטקסט הגולמי."""
+    prompts = [STEP2_EXTRACT_PROMPT, RETRY_PROMPT, RETRY_PROMPT]
     last_error: Exception | None = None
 
     for attempt in range(MAX_RETRIES):
-        prompt = prompts_to_try[min(attempt, len(prompts_to_try) - 1)]
+        prompt = prompts[min(attempt, len(prompts) - 1)]
         try:
-            logger.info(f"שלב 2 — חילוץ שדות (ניסיון {attempt + 1}/{MAX_RETRIES})")
+            logger.info(f"שלב 2 — ניסיון {attempt + 1}/{MAX_RETRIES}")
+            full_prompt = f"{prompt}\n\nFORM TEXT:\n{raw_text}"
 
-            full_prompt = f"{prompt}\n\nFORM TEXT TO ANALYZE:\n{raw_text}"
-
-            message = client.messages.create(
-                model      = MODEL,
-                max_tokens = 1024,
-                messages   = [{
-                    "role":    "user",
-                    "content": full_prompt,
-                }],
+            response = client.chat.completions.create(
+                model           = MODEL,
+                max_tokens      = 1024,
+                temperature     = 0,
+                response_format = {"type": "json_object"},  # ✨ הוספת JSON mode
+                messages        = [{"role": "user", "content": full_prompt}],
             )
-
-            raw_json = message.content[0].text if message.content else ""
-            parsed   = _parse_json_response(raw_json)
+            raw_json = response.choices[0].message.content or ""
+            parsed   = _parse_json(raw_json)
             if parsed is not None:
-                logger.info("שלב 2 הושלם בהצלחה")
-                return _validate_and_fill(parsed)
+                logger.info("חילוץ הושלם")
+                return _validate(parsed)
 
-            logger.warning(f"ניסיון {attempt + 1}: JSON לא תקין")
             last_error = ValueError("JSON פגום")
 
+        except RateLimitError:
+            wait = RETRY_DELAY_SECONDS * (attempt + 1) * 2
+            logger.warning(f"Rate limit — {wait}s")
+            time.sleep(wait)
         except Exception as e:
-            error_str = str(e).lower()
-            if "rate" in error_str or "429" in error_str or "overloaded" in error_str:
-                wait = RETRY_DELAY_SECONDS * (attempt + 1) * 2
-                logger.warning(f"Rate limit — ממתין {wait} שניות")
-                time.sleep(wait)
-            else:
-                logger.error(f"שגיאה בשלב 2: {e}")
-                time.sleep(RETRY_DELAY_SECONDS * (attempt + 1))
+            logger.error(f"שגיאה: {e}")
             last_error = e
+            time.sleep(RETRY_DELAY_SECONDS * (attempt + 1))
 
     empty = build_empty_result()
     empty["_error"] = {"value": str(last_error), "confidence": 0.0}  # type: ignore
     return empty
 
 
-def _step2_extract_direct(client, base64_image: str) -> ExtractionResult:
-    """Fallback: חילוץ ישיר מהתמונה ללא שלב 1."""
+def _extract_direct(client: OpenAI, base64_image: str) -> ExtractionResult:
+    """Fallback: חילוץ ישיר מהתמונה."""
+    prompts = [STEP2_EXTRACT_PROMPT, RETRY_PROMPT, RETRY_PROMPT]
     last_error: Exception | None = None
 
     for attempt in range(MAX_RETRIES):
-        prompt = STEP2_EXTRACT_PROMPT if attempt == 0 else RETRY_PROMPT
+        prompt = prompts[min(attempt, len(prompts) - 1)]
         try:
-            logger.info(f"חילוץ ישיר (ניסיון {attempt + 1}/{MAX_RETRIES})")
-
-            message = client.messages.create(
-                model      = MODEL,
-                max_tokens = 1024,
-                messages   = [{
+            response = client.chat.completions.create(
+                model           = MODEL,
+                max_tokens      = 1024,
+                temperature     = 0,
+                response_format = {"type": "json_object"},  # ✨ הוספת JSON mode
+                messages        = [{
                     "role": "user",
                     "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type":       "base64",
-                                "media_type": "image/jpeg",
-                                "data":       base64_image,
-                            },
-                        },
                         {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {
+                            "url":    f"data:image/jpeg;base64,{base64_image}",
+                            "detail": "high",
+                        }},
                     ],
                 }],
             )
-
-            raw_json = message.content[0].text if message.content else ""
-            parsed   = _parse_json_response(raw_json)
+            raw_json = response.choices[0].message.content or ""
+            parsed   = _parse_json(raw_json)
             if parsed is not None:
-                return _validate_and_fill(parsed)
+                return _validate(parsed)
             last_error = ValueError("JSON פגום")
 
+        except RateLimitError:
+            time.sleep(RETRY_DELAY_SECONDS * (attempt + 1) * 2)
         except Exception as e:
-            error_str = str(e).lower()
-            wait = RETRY_DELAY_SECONDS * (attempt + 1) * (
-                2 if "rate" in error_str or "overloaded" in error_str else 1
-            )
-            time.sleep(wait)
             last_error = e
+            time.sleep(RETRY_DELAY_SECONDS)
 
     empty = build_empty_result()
     empty["_error"] = {"value": str(last_error), "confidence": 0.0}  # type: ignore
     return empty
 
 
-def _parse_json_response(text: str) -> dict | None:
-    """מחלץ JSON מתשובת המודל."""
+def _parse_json(text: str) -> dict | None:
     if not text:
         return None
-    # JSON טהור
     try:
         return json.loads(text.strip())
     except json.JSONDecodeError:
         pass
-    # עטוף ב-```
     start = text.find("{")
     end   = text.rfind("}") + 1
     if start != -1 and end > start:
@@ -230,20 +187,24 @@ def _parse_json_response(text: str) -> dict | None:
     return None
 
 
-def _validate_and_fill(raw: dict) -> ExtractionResult:
+def _validate(raw: dict) -> ExtractionResult:
     """ולידציה קפדנית — מונעת ערכים מומצאים."""
     result: ExtractionResult = {}
 
     for field_key, field_def in FIELDS.items():
         if field_key not in raw:
-            empty_val: Any = [] if field_def["multi"] else None
-            result[field_key] = {"value": empty_val, "confidence": 0.0}
+            result[field_key] = {
+                "value":      [] if field_def["multi"] else None,
+                "confidence": 0.0,
+            }
             continue
 
         field_data = raw[field_key]
         if not isinstance(field_data, dict):
-            empty_val = [] if field_def["multi"] else None
-            result[field_key] = {"value": empty_val, "confidence": 0.0}
+            result[field_key] = {
+                "value":      [] if field_def["multi"] else None,
+                "confidence": 0.0,
+            }
             continue
 
         value      = field_data.get("value")
@@ -254,7 +215,6 @@ def _validate_and_fill(raw: dict) -> ExtractionResult:
         except (TypeError, ValueError):
             confidence = 0.0
 
-        # פורמט multi
         if field_def["multi"]:
             if value is None:
                 value = []
@@ -273,22 +233,33 @@ def _validate_and_fill(raw: dict) -> ExtractionResult:
         if field_key == "תעודת_זהות" and value is not None:
             digits = re.sub(r"\D", "", str(value))
             if len(digits) < 8 or len(digits) > 10:
-                value, confidence = None, 0.0
+                # במקום לדחות לגמרי, מורידים confidence
+                confidence = max(0.0, confidence - 0.3)
             else:
                 value = digits
 
         elif field_key == "תאריך_קבלה" and value is not None:
             if not re.match(r"^\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}$", str(value).strip()):
-                value, confidence = None, 0.0
+                # תאריך בפורמט לא סטנדרטי - מורידים confidence אבל שומרים
+                confidence = max(0.0, confidence - 0.3)
 
         elif field_key in ("מספר_מרכזי", "מספר_התחייבות") and isinstance(value, list):
-            value = [v for v in value
-                     if not re.match(r"^\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}$", str(v).strip())]
+            # מסננים רק תאריכים ברורים, לא כל מספר
+            filtered = []
+            for v in value:
+                v_str = str(v).strip()
+                # רק אם זה בבירור תאריך (יש 2 מפרידים)
+                if v_str.count('/') >= 2 or v_str.count('.') >= 2 or v_str.count('-') >= 2:
+                    continue
+                filtered.append(v)
+            value = filtered
             if not value:
                 confidence = 0.0
 
-        # סף confidence
-        min_conf = 0.85 if field_key in ("שם_פרטי", "שם_משפחה") else 0.70
+        # סף confidence - מורידים משמעותית!
+        # שמות: 0.60 במקום 0.85 (כתב יד קשה לקריאה)
+        # שאר השדות: 0.50 במקום 0.70
+        min_conf = 0.60 if field_key in ("שם_פרטי", "שם_משפחה") else 0.50
         if confidence < min_conf:
             value      = [] if field_def["multi"] else None
             confidence = 0.0
