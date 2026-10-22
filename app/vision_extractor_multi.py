@@ -51,9 +51,9 @@ MODELS = {
         "display_name": "Google Gemini 3.6 Flash",
     },
     "anthropic": {
-        "name": "claude-3-5-sonnet-20241022",
+        "name": "claude-3-opus-20240229",  # Claude 3 Opus - הכי חזק ויציב
         "api_key_env": "ANTHROPIC_API_KEY",
-        "display_name": "Anthropic Claude 3.5 Sonnet",
+        "display_name": "Anthropic Claude 3 Opus",
     }
 }
 
@@ -408,7 +408,7 @@ def _extract_anthropic(base64_image: str, api_key: str, model_name: str) -> Extr
 def _anthropic_step1_read(client: Any, model_name: str, base64_image: str) -> str | None:
     """Anthropic Step 1: Read all text from image."""
     try:
-        logger.info("שלב 1 — קריאת טקסט (Claude)")
+        logger.info(f"שלב 1 — קריאת טקסט (Claude) - מודל: {model_name}")
         
         response = client.messages.create(
             model=model_name,
@@ -440,6 +440,7 @@ def _anthropic_step1_read(client: Any, model_name: str, base64_image: str) -> st
         return text
     except Exception as e:
         logger.error(f"שגיאה Claude שלב 1: {e}")
+        logger.error(f"אם זה 404, המודל {model_name} לא זמין. נסי: claude-3-opus-20240229, claude-3-sonnet-20240229, או claude-3-haiku-20240307")
         return None
 
 

@@ -261,7 +261,7 @@ def main() -> None:
     provider_names = {
         "gemini": "Google Gemini 3.6 Flash",
         "openai": "OpenAI GPT-4o", 
-        "anthropic": "Anthropic Claude 3.5 Sonnet",
+        "anthropic": "Anthropic Claude 3 Opus",
     }
     current_model = provider_names.get(st.session_state.ai_provider, "Gemini")
     
@@ -292,7 +292,7 @@ def _render_sidebar() -> None:
         provider_options = {
             "gemini": "🟢 Google Gemini 3.6 Flash",
             "openai": "🔵 OpenAI GPT-4o",
-            "anthropic": "🟣 Anthropic Claude 3.5 Sonnet",
+            "anthropic": "🟣 Anthropic Claude 3 Opus",
         }
         
         selected_provider = st.selectbox(
@@ -395,7 +395,7 @@ def _run_processing(uploaded_files) -> None:
     provider_names = {
         "gemini": "Google Gemini 3.6 Flash",
         "openai": "OpenAI GPT-4o",
-        "anthropic": "Anthropic Claude 3.5 Sonnet",
+        "anthropic": "Anthropic Claude 3 Opus",
     }
 
     try:
