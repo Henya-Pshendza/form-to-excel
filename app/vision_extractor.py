@@ -70,7 +70,6 @@ def _step1_read(client: anthropic.Anthropic, base64_image: str) -> str | None:
         response = client.messages.create(
             model=MODEL_NAME,
             max_tokens=2500,
-            temperature=0.3,
             messages=[{
                 "role": "user",
                 "content": [
@@ -113,7 +112,6 @@ def _step2_extract(client: anthropic.Anthropic, raw_text: str) -> ExtractionResu
             response = client.messages.create(
                 model=MODEL_NAME,
                 max_tokens=1024,
-                temperature=0,
                 messages=[{
                     "role": "user",
                     "content": full_prompt
@@ -149,7 +147,6 @@ def _extract_direct(client: anthropic.Anthropic, base64_image: str) -> Extractio
             response = client.messages.create(
                 model=MODEL_NAME,
                 max_tokens=1024,
-                temperature=0,
                 messages=[{
                     "role": "user",
                     "content": [
