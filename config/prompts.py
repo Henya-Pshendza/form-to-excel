@@ -15,78 +15,52 @@ _SENDERS_LIST = ", ".join(ALL_SENDERS)
 # STEP 1 — Read everything visible in the image
 # ─────────────────────────────────────────────────────────────────────────────
 
-STEP1_READ_PROMPT = """You are an expert OCR engine specializing in Hebrew handwriting and medical forms.
+STEP1_READ_PROMPT = """Read this Israeli medical form carefully. Extract ALL visible text.
 
-🎯 YOUR MISSION: Read EVERY character, especially HANDWRITTEN HEBREW names.
+Focus on these areas in order:
 
-CRITICAL FOCUS AREAS:
-1. HANDWRITTEN HEBREW TEXT (names, dates) — read letter by letter, even if unclear
-2. STICKERS with numbers and labels
-3. STAMPS (especially "התקבל" with dates)
-4. Printed form fields and their values
+1. HANDWRITTEN HEBREW NAMES (usually at top):
+   - שם פרטי (first name)
+   - שם משפחה (family name)
+   Read the handwriting carefully, even if unclear.
 
-READ EVERYTHING IN THIS ORDER:
+2. BARCODE STICKERS:
+   - Stickers with "מרכזי" label → note the number
+   - Stickers WITHOUT label (just barcode + number) → note the number
+   Read ALL stickers you see.
 
-📍 PATIENT NAMES (TOP PRIORITY - usually handwritten in Hebrew):
-   - Look for "שם פרטי" / "שם" / "מנוי" labels
-   - Look for "שם משפחה" / "משפחה" labels  
-   - Names are often handwritten in cursive Hebrew near the top
-   - Try your best even if handwriting is unclear — transcribe what you can see
-   - Only mark "(illegible)" if truly unreadable
+3. HANDWRITTEN ID NUMBER:
+   - ת.ז. (8-9 digits, usually handwritten)
 
-📍 STICKERS (2 types - READ CAREFULLY):
-   
-   TYPE 1 - מרכזי sticker:
-   - White/yellow barcode sticker WITH the word "מרכזי" written on/next to it
-   - Usually 6-8 digits
-   
-   TYPE 2 - התחייבות sticker:
-   - Barcode sticker WITHOUT any label (just barcode + number)
-   - OR sticker with numbers but NO "מרכזי" label
-   - Usually 8-12 digits
-   
-   ⚠️ CRITICAL: Distinguish between these two types!
+4. STAMPS:
+   - "התקבל" stamp with date inside
 
-📍 FORM FIELDS (printed text):
-   - מספר התחייבות field — may appear as printed form field labeled "מספר התחייבות"/"התחייבות"/"דרישה"/"דגימה"
-   - ת.ז. field — often handwritten, 8-9 digits (NOT printed field, usually filled in by hand)
+5. OTHER TEXT:
+   - Organization name (כללית, מכבי, מאוחדת, לאומית)
+   - Any field labeled "מספר התחייבות"
+   - Any other visible text
 
-📍 STAMPS:
-   - "התקבל" stamp — read the date inside it (DD/MM/YYYY format)
-   - Any other stamps with dates or numbers
-
-📍 OTHER:
-   - Organization name (header/logo: כללית, מכבי, מאוחדת, לאומית)
-
-OUTPUT FORMAT — organize clearly:
+Please organize your output like this:
 ```
-=== HANDWRITTEN NAMES ===
-שם פרטי: [transcribe - try your best even if unclear]
-שם משפחה: [transcribe - try your best even if unclear]
+Names (handwritten):
+שם פרטי: [write what you see]
+שם משפחה: [write what you see]
 
-=== HANDWRITTEN ID ===
-ת.ז.: [8-9 digits, usually handwritten]
+ID: [digits]
 
-=== STICKERS - מרכזי ===
-[List stickers that have "מרכזי" label on/near them]
-Number: [digits]
+Stickers:
+- Sticker with "מרכזי": [number]
+- Sticker without label: [number]
 
-=== STICKERS - התחייבות (no label) ===
-[List barcode stickers WITHOUT "מרכזי" label]
-Number: [digits]
+Stamp:
+התקבל: [date]
 
-=== FORM FIELDS - התחייבות ===
-[If there's a printed field labeled "מספר התחייבות"]
-Number: [digits]
+Organization: [name]
 
-=== STAMPS ===
-התקבל: [DD/MM/YYYY date if exists]
-
-=== ORGANIZATION ===
-[כללית/מכבי/מאוחדת/לאומית if visible in header/logo]
+Other: [any other visible text]
 ```
 
-⚠️ Try to extract everything you can see — use lower confidence for unclear items."""
+Read everything you can see, even if handwriting is unclear."""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 2 — Extract structured fields from the transcribed text

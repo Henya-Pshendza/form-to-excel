@@ -83,7 +83,7 @@ def _step1_read(client: OpenAI, base64_image: str) -> str | None:
         )
         text = response.choices[0].message.content or ""
         logger.info(f"שלב 1 הושלם — {len(text)} תווים")
-        logger.debug(f"טקסט שנקרא:\n{text[:500]}...")  # ✨ לוג חלקי לדיבאג
+        logger.info(f"טקסט מלא מהמודל:\n{text}")  # ✨ לוג מלא לזיהוי בעיה
         return text
     except Exception as e:
         logger.error(f"שגיאה בשלב 1: {e}")
