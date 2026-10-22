@@ -340,19 +340,22 @@ def main() -> None:
     _init_state()
 
     # כותרת עם לוגו
-    col_title, col_logo = st.columns([11, 1])
+    logo_path = Path(__file__).parent.parent / "assets" / "logo.png"
     
-    with col_title:
-        st.markdown("""
-        <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 0;">
-            <h1 style="margin: 0; padding: 0;">מטפסי התחייבות → אקסל</h1>
+    # המרת תמונה ל-base64 אם קיימת
+    if logo_path.exists():
+        import base64
+        with open(logo_path, "rb") as f:
+            logo_base64 = base64.b64encode(f.read()).decode()
+        
+        st.markdown(f"""
+        <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 1rem; direction: rtl;">
+            <img src="data:image/png;base64,{logo_base64}" style="width: 70px; height: 70px; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" alt="Logo">
+            <h1 style="margin: 0; padding: 0; font-size: 36px; font-weight: 300;">מטפסי התחייבות → אקסל</h1>
         </div>
         """, unsafe_allow_html=True)
-    
-    with col_logo:
-        logo_path = Path(__file__).parent.parent / "assets" / "logo.png"
-        if logo_path.exists():
-            st.image(str(logo_path), width=80)
+    else:
+        st.title("מטפסי התחייבות → אקסל")
     
     # תצוגת המודל הנוכחי
     provider_names = {
