@@ -1,7 +1,7 @@
 """
 app/vision_extractor.py
 -----------------------
-Two-step extraction with Gemini Vision:
+Two-step extraction with Claude 3.5 Sonnet Vision:
   Step 1 — reads all text from the image
   Step 2 — extracts structured fields from the raw text
 """
@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-import google.generativeai as genai
+import anthropic
 
 from config.fields import FIELDS
 from config.prompts import STEP1_READ_PROMPT, STEP2_EXTRACT_PROMPT, RETRY_PROMPT
@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 
 MAX_RETRIES         = 3
 RETRY_DELAY_SECONDS = 2
-MODEL_NAME          = "gemini-1.5-flash"  # ✨ או gemini-1.5-pro לדיוק גבוה יותר
+MODEL_NAME          = "claude-3-5-sonnet-20241022"  # ✨ Claude 3.5 Sonnet
 
 ExtractionResult = dict[str, dict[str, Any]]
 
@@ -46,43 +46,51 @@ def build_empty_result() -> ExtractionResult:
 
 
 def extract_from_image(base64_image: str) -> ExtractionResult:
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
-        raise EnvironmentError("GEMINI_API_KEY לא מוגדר ב-.env")
+        raise EnvironmentError("ANTHROPIC_API_KEY לא מוגדר ב-.env")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(MODEL_NAME)
+    client = anthropic.Anthropic(api_key=api_key)
 
     # שלב 1: קריאת כל הטקסט
-    raw_text = _step1_read(model, base64_image)
+    raw_text = _step1_read(client, base64_image)
     if not raw_text:
         logger.warning("שלב 1 נכשל — עובר לחילוץ ישיר")
-        return _extract_direct(model, base64_image)
+        return _extract_direct(client, base64_image)
 
     # שלב 2: חילוץ שדות מהטקסט
-    return _step2_extract(model, raw_text)
+    return _step2_extract(client, raw_text)
 
 
-def _step1_read(model: Any, base64_image: str) -> str | None:
+def _step1_read(client: anthropic.Anthropic, base64_image: str) -> str | None:
     """שלב 1: קריאת כל הטקסט מהתמונה."""
     try:
-        logger.info("שלב 1 — קריאת טקסט (Gemini)")
+        logger.info("שלב 1 — קריאת טקסט (Claude 3.5)")
         
-        # המרת base64 לבתים
-        image_bytes = base64.b64decode(base64_image)
-        
-        response = model.generate_content(
-            [
-                STEP1_READ_PROMPT,
-                {"mime_type": "image/jpeg", "data": image_bytes}
-            ],
-            generation_config={
-                "temperature": 0.3,
-                "max_output_tokens": 2500,
-            }
+        response = client.messages.create(
+            model=MODEL_NAME,
+            max_tokens=2500,
+            temperature=0.3,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": base64_image,
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "text": STEP1_READ_PROMPT
+                    }
+                ],
+            }]
         )
         
-        text = response.text if response else ""
+        text = response.content[0].text if response.content else ""
         logger.info(f"שלב 1 הושלם — {len(text)} תווים")
         logger.info(f"טקסט מלא מהמודל:\n{text}")
         return text
@@ -91,7 +99,7 @@ def _step1_read(model: Any, base64_image: str) -> str | None:
         return None
 
 
-def _step2_extract(model: Any, raw_text: str) -> ExtractionResult:
+def _step2_extract(client: anthropic.Anthropic, raw_text: str) -> ExtractionResult:
     """שלב 2: חילוץ שדות מהטקסט הגולמי."""
     prompts = [STEP2_EXTRACT_PROMPT, RETRY_PROMPT, RETRY_PROMPT]
     last_error: Exception | None = None
@@ -102,16 +110,17 @@ def _step2_extract(model: Any, raw_text: str) -> ExtractionResult:
             logger.info(f"שלב 2 — ניסיון {attempt + 1}/{MAX_RETRIES}")
             full_prompt = f"{prompt}\n\nFORM TEXT:\n{raw_text}"
 
-            response = model.generate_content(
-                full_prompt,
-                generation_config={
-                    "temperature": 0,
-                    "max_output_tokens": 1024,
-                    "response_mime_type": "application/json",
-                }
+            response = client.messages.create(
+                model=MODEL_NAME,
+                max_tokens=1024,
+                temperature=0,
+                messages=[{
+                    "role": "user",
+                    "content": full_prompt
+                }]
             )
             
-            raw_json = response.text if response else ""
+            raw_json = response.content[0].text if response.content else ""
             parsed   = _parse_json(raw_json)
             if parsed is not None:
                 logger.info("חילוץ הושלם")
@@ -129,7 +138,7 @@ def _step2_extract(model: Any, raw_text: str) -> ExtractionResult:
     return empty
 
 
-def _extract_direct(model: Any, base64_image: str) -> ExtractionResult:
+def _extract_direct(client: anthropic.Anthropic, base64_image: str) -> ExtractionResult:
     """Fallback: חילוץ ישיר מהתמונה."""
     prompts = [STEP2_EXTRACT_PROMPT, RETRY_PROMPT, RETRY_PROMPT]
     last_error: Exception | None = None
@@ -137,21 +146,30 @@ def _extract_direct(model: Any, base64_image: str) -> ExtractionResult:
     for attempt in range(MAX_RETRIES):
         prompt = prompts[min(attempt, len(prompts) - 1)]
         try:
-            image_bytes = base64.b64decode(base64_image)
-            
-            response = model.generate_content(
-                [
-                    prompt,
-                    {"mime_type": "image/jpeg", "data": image_bytes}
-                ],
-                generation_config={
-                    "temperature": 0,
-                    "max_output_tokens": 1024,
-                    "response_mime_type": "application/json",
-                }
+            response = client.messages.create(
+                model=MODEL_NAME,
+                max_tokens=1024,
+                temperature=0,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": base64_image,
+                            },
+                        },
+                        {
+                            "type": "text",
+                            "text": prompt
+                        }
+                    ],
+                }]
             )
             
-            raw_json = response.text if response else ""
+            raw_json = response.content[0].text if response.content else ""
             parsed   = _parse_json(raw_json)
             if parsed is not None:
                 return _validate(parsed)
@@ -238,21 +256,17 @@ def _validate(raw: dict) -> ExtractionResult:
                 confidence = max(0.0, confidence - 0.3)
 
         elif field_key in ("מספר_מרכזי", "מספר_התחייבות") and isinstance(value, list):
-            # ✨ ולידציה חכמה יותר למספרים
             filtered = []
             for v in value:
                 v_str = str(v).strip()
-                # סינון תאריכים ברורים בלבד
                 if v_str.count('/') >= 2 or v_str.count('.') >= 2 or v_str.count('-') >= 2:
                     continue
-                # סינון מספרים קצרים מדי (ספרה בודדת)
                 digits = re.sub(r"\D", "", v_str)
-                if len(digits) < 4:  # ✨ מספר מרכזי/התחייבות לפחות 4 ספרות
+                if len(digits) < 4:
                     continue
                 filtered.append(v)
             value = filtered
             
-            # ✨ הגבלת מספר ערכים לשדה (מקסימום 3)
             if len(value) > 3:
                 logger.warning(f"{field_key}: {len(value)} ערכים נמצאו, שומר רק 3 ראשונים")
                 value = value[:3]
@@ -260,13 +274,13 @@ def _validate(raw: dict) -> ExtractionResult:
             if not value:
                 confidence = 0.0
 
-        # ✨ סף confidence מאוזן
+        # סף confidence מאוזן
         if field_key in ("שם_פרטי", "שם_משפחה"):
-            min_conf = 0.50  # ✨ שמות: מאוזן - לא מומצא אבל לא דוחה הכל
+            min_conf = 0.50
         elif field_key == "תעודת_זהות":
-            min_conf = 0.45  # ✨ ת.ז. כתובה ביד - קצת יותר מתיר
+            min_conf = 0.45
         else:
-            min_conf = 0.45  # ✨ שאר השדות: מתיר יותר
+            min_conf = 0.45
             
         if confidence < min_conf:
             value      = [] if field_def["multi"] else None

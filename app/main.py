@@ -255,7 +255,7 @@ def main() -> None:
     _init_state()
 
     st.title("📋 מטפסי התחייבות → אקסל")
-    st.caption("חילוץ אוטומטי עם Gemini Vision • המעבדה המרכזית לנגיפים")
+    st.caption("חילוץ אוטומטי עם Claude 3.5 Sonnet • המעבדה המרכזית לנגיפים")
     st.divider()
 
     _render_sidebar()
@@ -274,12 +274,12 @@ def _render_sidebar() -> None:
     with st.sidebar:
         st.header("הגדרות")
 
-        api_key = os.getenv("GEMINI_API_KEY", "")
+        api_key = os.getenv("ANTHROPIC_API_KEY", "")
         if api_key:
-            st.success("✅ Gemini API מוגדר")
+            st.success("✅ Claude API מוגדר")
         else:
-            st.error("❌ Gemini API חסר")
-            st.info("הוסיפי ל-`.env`:\n```\nGEMINI_API_KEY=...\n```")
+            st.error("❌ Claude API חסר")
+            st.info("הוסיפי ל-Secrets:\n```\nANTHROPIC_API_KEY = \"...\"\n```")
 
         st.divider()
 
@@ -379,7 +379,7 @@ def _run_processing(uploaded_files) -> None:
         # מדידת זמן עיבוד
         start_time = time.time()
 
-        with st.spinner("מעבד טפסים עם Gemini Vision..."):
+        with st.spinner("מעבד טפסים עם Claude 3.5 Sonnet..."):
             forms = process_multiple_files(valid_paths, update_progress)
 
         elapsed = time.time() - start_time
