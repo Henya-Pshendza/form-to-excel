@@ -1,20 +1,19 @@
 """
 app/name_extractor.py
 ---------------------
-חילוץ ממוקד של שם פרטי ושם משפחה.
+חילוץ ממוקד של שם פרטי ושם משפחה עם Claude.
 
 האסטרטגיה:
-1. שולחים את הטופס המלא ומבקשים את הקואורדינטות של אזור השם
-2. חותכים את האזור ומגדילים אותו
-3. שולחים את האזור החתוך בלבד לקריאה מדויקת
-
-אם השלב הזה נכשל — מחזירים null ומשאירים לתיקון ידני.
+1. שולחים את הטופס המלא ומבקשים קואורדינטות של אזור השם
+2. חותכים ומגדילים את האזור
+3. שולחים את האזור החתוך לקריאה מדויקת
 """
 
 from __future__ import annotations
 
 import base64
 import io
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -29,39 +28,29 @@ load_dotenv(_PROJECT_ROOT / ".env")
 
 logger = get_logger(__name__)
 
+MODEL = "claude-3-5-sonnet-20241022"
+
 
 def extract_name_focused(image: Image.Image) -> dict[str, Any]:
     """
-    מנסה לחלץ שם פרטי ושם משפחה באמצעות crop ממוקד.
-
-    Args:
-        image: PIL.Image של הטופס המלא
-
-    Returns:
-        { "שם_פרטי": {"value": ..., "confidence": ...},
-          "שם_משפחה": {"value": ..., "confidence": ...} }
-        או None אם הניסיון נכשל
+    מנסה לחלץ שם פרטי ושם משפחה עם crop ממוקד.
     """
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         return _empty_names()
 
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
 
-        # שלב 1: מציאת אזור השם בטופס המלא
         region = _find_name_region(client, image)
         if region is None:
-            logger.debug("לא מצאתי אזור שם — עובר לקריאה ישירה מהטופס המלא")
             return _read_name_from_full_image(client, image)
 
-        # שלב 2: חיתוך והגדלה של האזור
         cropped = _crop_and_zoom(image, region)
         if cropped is None:
             return _empty_names()
 
-        # שלב 3: קריאת השם מהאזור החתוך
         return _read_name_from_crop(client, cropped)
 
     except Exception as e:
@@ -70,11 +59,8 @@ def extract_name_focused(image: Image.Image) -> dict[str, Any]:
 
 
 def _find_name_region(client, image: Image.Image) -> dict | None:
-    """
-    שולח את הטופס המלא ומבקש את מיקום שורת השם.
-    מחזיר { "x1": %, "y1": %, "x2": %, "y2": % } — אחוזים מגודל התמונה.
-    """
-    b64 = _image_to_base64(image, quality=60)  # איכות נמוכה — מהיר יותר
+    """מוצא את הקואורדינטות של אזור השם בטופס."""
+    b64 = _image_to_base64(image, quality=60)
 
     prompt = """Look at this Israeli medical form.
 Find the area where the PATIENT NAME is written (handwritten or printed Hebrew name).
@@ -88,34 +74,32 @@ If you cannot find a name area, return: {"x1": 0, "y1": 0, "x2": 0, "y2": 0}
 Return ONLY the JSON, nothing else."""
 
     try:
-        response = client.chat.completions.create(
-            model      = "gpt-4o",
+        message = client.messages.create(
+            model      = MODEL,
             max_tokens = 100,
-            temperature= 0,
             messages   = [{
                 "role": "user",
                 "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type":       "base64",
+                            "media_type": "image/jpeg",
+                            "data":       b64,
+                        },
+                    },
                     {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {
-                        "url":    f"data:image/jpeg;base64,{b64}",
-                        "detail": "low",  # low — מהיר וזול
-                    }},
                 ],
             }],
         )
-        import json
-        text = response.choices[0].message.content or ""
-        # מחפשים JSON בתשובה
+        text  = message.content[0].text if message.content else ""
         start = text.find("{")
         end   = text.rfind("}") + 1
         if start == -1:
             return None
         data = json.loads(text[start:end])
-
-        # בדיקה שהאזור לא אפס
         if data.get("x2", 0) == 0 and data.get("y2", 0) == 0:
             return None
-
         return data
 
     except Exception as e:
@@ -124,30 +108,14 @@ Return ONLY the JSON, nothing else."""
 
 
 def _crop_and_zoom(image: Image.Image, region: dict) -> Image.Image | None:
-    """
-    חותך את האזור הנתון ומגדיל אותו לגובה מינימלי של 200px.
-
-    Args:
-        image:  תמונה מלאה
-        region: { x1%, y1%, x2%, y2% }
-
-    Returns:
-        PIL.Image חתוך ומוגדל, או None אם האזור לא תקין
-    """
+    """חותך את האזור ומגדיל אותו."""
     try:
         w, h = image.size
-
-        x1 = int(region["x1"] / 100 * w)
-        y1 = int(region["y1"] / 100 * h)
-        x2 = int(region["x2"] / 100 * w)
-        y2 = int(region["y2"] / 100 * h)
-
-        # הוספת padding
-        pad = 20
-        x1 = max(0, x1 - pad)
-        y1 = max(0, y1 - pad)
-        x2 = min(w, x2 + pad)
-        y2 = min(h, y2 + pad)
+        pad  = 20
+        x1   = max(0, int(region["x1"] / 100 * w) - pad)
+        y1   = max(0, int(region["y1"] / 100 * h) - pad)
+        x2   = min(w, int(region["x2"] / 100 * w) + pad)
+        y2   = min(h, int(region["y2"] / 100 * h) + pad)
 
         if x2 <= x1 or y2 <= y1:
             return None
@@ -155,26 +123,20 @@ def _crop_and_zoom(image: Image.Image, region: dict) -> Image.Image | None:
         cropped = image.crop((x1, y1, x2, y2))
 
         # הגדלה אם קטן מדי
-        crop_w, crop_h = cropped.size
-        if crop_h < 120:
-            scale  = 120 / crop_h
-            new_w  = int(crop_w * scale)
-            new_h  = 120
-            cropped = cropped.resize((new_w, new_h), Image.LANCZOS)
+        cw, ch = cropped.size
+        if ch < 120:
+            scale   = 120 / ch
+            cropped = cropped.resize((int(cw * scale), 120), Image.LANCZOS)
 
-        logger.debug(f"חתכתי אזור שם: {x1},{y1} → {x2},{y2}, גודל: {cropped.size}")
         return cropped
-
     except Exception as e:
         logger.debug(f"_crop_and_zoom נכשל: {e}")
         return None
 
 
 def _read_name_from_crop(client, cropped: Image.Image) -> dict[str, Any]:
-    """
-    שולח את האזור החתוך ומבקש לקרוא את השם.
-    """
-    b64 = _image_to_base64(cropped, quality=90)  # איכות גבוהה לכתב יד
+    """קורא את השם מהאזור החתוך."""
+    b64 = _image_to_base64(cropped, quality=90)
 
     prompt = """This is a zoomed crop from an Israeli medical form showing the patient name area.
 Read the HANDWRITTEN or PRINTED Hebrew patient name you see.
@@ -182,93 +144,93 @@ Read the HANDWRITTEN or PRINTED Hebrew patient name you see.
 Return ONLY JSON:
 {"first_name": "ישראל", "last_name": "ישראלי", "confidence": 0.85}
 
-If the name has only one part visible: {"first_name": "ישראל", "last_name": null, "confidence": 0.8}
+If only one part visible: {"first_name": "ישראל", "last_name": null, "confidence": 0.8}
 If completely unreadable: {"first_name": null, "last_name": null, "confidence": 0.0}
 
 Rules:
 - confidence = how clearly you can read it (0.0-1.0)
-- If confidence < 0.7, set the value to null
+- If confidence < 0.7, set value to null
 - Return ONLY the JSON, nothing else"""
 
     try:
-        response = client.chat.completions.create(
-            model      = "gpt-4o",
+        message = client.messages.create(
+            model      = MODEL,
             max_tokens = 100,
-            temperature= 0,
             messages   = [{
                 "role": "user",
                 "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type":       "base64",
+                            "media_type": "image/jpeg",
+                            "data":       b64,
+                        },
+                    },
                     {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {
-                        "url":    f"data:image/jpeg;base64,{b64}",
-                        "detail": "high",
-                    }},
                 ],
             }],
         )
-        import json as _json
-        text  = response.choices[0].message.content or ""
+        text  = message.content[0].text if message.content else ""
         start = text.find("{")
         end   = text.rfind("}") + 1
         if start == -1:
             return _empty_names()
 
-        data       = _json.loads(text[start:end])
+        data       = json.loads(text[start:end])
         confidence = float(data.get("confidence", 0.0))
         first      = data.get("first_name")
         last       = data.get("last_name")
 
-        logger.info(f"שם חולץ מ-crop: {first} {last} (confidence={confidence:.0%})")
-
+        logger.info(f"שם חולץ מ-crop: {first} {last} ({confidence:.0%})")
         return {
             "שם_פרטי":  {"value": first, "confidence": confidence},
             "שם_משפחה": {"value": last,  "confidence": confidence},
         }
-
     except Exception as e:
         logger.debug(f"_read_name_from_crop נכשל: {e}")
         return _empty_names()
 
 
 def _read_name_from_full_image(client, image: Image.Image) -> dict[str, Any]:
-    """
-    Fallback: מנסה לקרוא שם ישירות מהתמונה המלאה בלי crop.
-    """
+    """Fallback: קריאת שם מהתמונה המלאה."""
     b64 = _image_to_base64(image, quality=75)
 
     prompt = """Look at this Israeli medical form.
-Find and read the PATIENT NAME — it may be handwritten Hebrew next to a label like שם/שם פרטי/מנוי.
+Find and read the PATIENT NAME — it may be handwritten Hebrew next to שם/שם פרטי/מנוי.
 
 Return ONLY JSON:
 {"first_name": "ישראל", "last_name": "ישראלי", "confidence": 0.85}
 
-If unreadable or not found: {"first_name": null, "last_name": null, "confidence": 0.0}
+If unreadable: {"first_name": null, "last_name": null, "confidence": 0.0}
 Return ONLY the JSON."""
 
     try:
-        response = client.chat.completions.create(
-            model      = "gpt-4o",
+        message = client.messages.create(
+            model      = MODEL,
             max_tokens = 100,
-            temperature= 0,
             messages   = [{
                 "role": "user",
                 "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type":       "base64",
+                            "media_type": "image/jpeg",
+                            "data":       b64,
+                        },
+                    },
                     {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {
-                        "url":    f"data:image/jpeg;base64,{b64}",
-                        "detail": "high",
-                    }},
                 ],
             }],
         )
-        import json as _json
-        text  = response.choices[0].message.content or ""
+        text  = message.content[0].text if message.content else ""
         start = text.find("{")
         end   = text.rfind("}") + 1
         if start == -1:
             return _empty_names()
 
-        data       = _json.loads(text[start:end])
+        data       = json.loads(text[start:end])
         confidence = float(data.get("confidence", 0.0))
         return {
             "שם_פרטי":  {"value": data.get("first_name"), "confidence": confidence},
