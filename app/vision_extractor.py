@@ -59,8 +59,8 @@ def extract_from_image(base64_image: str) -> ExtractionResult:
         logger.warning("שלב 1 נכשל — עובר לחילוץ ישיר")
         return _extract_direct(model, base64_image)
 
-    # שלב 2: חילוץ שדות מהטקסט
-    return _step2_extract(model, raw_text)
+    # שלב 2: חילוץ שדות מהטקסט + תמונה
+    return _step2_extract(model, base64_image, raw_text)
 
 
 def _step1_read(model: Any, base64_image: str) -> str | None:
@@ -93,8 +93,8 @@ def _step1_read(model: Any, base64_image: str) -> str | None:
         return None
 
 
-def _step2_extract(model: Any, raw_text: str) -> ExtractionResult:
-    """שלב 2: חילוץ שדות מהטקסט הגולמי."""
+def _step2_extract(model: Any, base64_image: str, raw_text: str) -> ExtractionResult:
+    """שלב 2: חילוץ שדות מהטקסט + תמונה."""
     prompts = [STEP2_EXTRACT_PROMPT, RETRY_PROMPT, RETRY_PROMPT]
     last_error: Exception | None = None
 
@@ -102,18 +102,27 @@ def _step2_extract(model: Any, raw_text: str) -> ExtractionResult:
         prompt = prompts[min(attempt, len(prompts) - 1)]
         try:
             logger.info(f"שלב 2 — ניסיון {attempt + 1}/{MAX_RETRIES}")
-            full_prompt = f"{prompt}\n\nFORM TEXT:\n{raw_text}"
+            
+            # יצירת prompt עם הטקסט שקראנו
+            full_prompt = f"{prompt}\n\nכל הטקסט שקראתי מהטופס:\n{raw_text}\n\nעכשיו חלץ את השדות המבוקשים."
+            
+            # המרת base64 לבתים + שליחת תמונה וטקסט ביחד
+            image_bytes = base64.b64decode(base64_image)
+            image_part = {
+                "mime_type": "image/jpeg",
+                "data": image_bytes
+            }
 
             response = model.generate_content(
-                full_prompt,
+                [full_prompt, image_part],
                 generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=2048,  # ✨ הגדלה ל-2048
+                    max_output_tokens=2048,
                     response_mime_type="application/json",
                 )
             )
             
             raw_json = response.text if response else ""
-            logger.info(f"תגובת המודל (ניסיון {attempt + 1}):\n{raw_json}")  # ✨ לוג מלא
+            logger.info(f"תגובת המודל (ניסיון {attempt + 1}):\n{raw_json}")
             parsed   = _parse_json(raw_json)
             if parsed is not None:
                 logger.info("חילוץ הושלם")
