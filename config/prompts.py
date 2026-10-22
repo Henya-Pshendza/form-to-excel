@@ -1,102 +1,99 @@
 """
 config/prompts.py
 -----------------
-Prompts for GPT-4o Vision — written in English for maximum accuracy.
+Two-step extraction prompts for GPT-4o Vision.
 
-Israeli medical commitment forms ("טופס התחייבות") from various HMOs and hospitals.
-The model must extract exactly what it sees — never guess or hallucinate.
+Step 1: Read all text from the form (OCR pass)
+Step 2: Extract structured fields from the raw text
 """
 
 from config.senders import ALL_SENDERS
 
-_SENDERS_LIST = "\n".join(f"- {s}" for s in ALL_SENDERS)
+_SENDERS_LIST = ", ".join(ALL_SENDERS)
 
-EXTRACTION_PROMPT = f"""You are a precise OCR data extraction engine for Israeli medical laboratory forms.
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 1 — Read everything visible in the image
+# ─────────────────────────────────────────────────────────────────────────────
 
-You will receive an image of a medical commitment form ("טופס התחייבות") from an Israeli health fund or hospital.
+STEP1_READ_PROMPT = """You are an OCR engine. Your only job right now is to READ and TRANSCRIBE.
 
-═══════════════════════════════════════════════════════
-CRITICAL RULE — MORE IMPORTANT THAN ANYTHING ELSE:
-NEVER invent, guess, or hallucinate data.
-If you cannot clearly read a value → return null.
-An empty field is infinitely better than a wrong value.
-═══════════════════════════════════════════════════════
+Look at this Israeli medical form image carefully.
+Read EVERY piece of text you can see — printed, handwritten, stamped, on stickers.
 
-BACKGROUND — HOW THESE FORMS LOOK:
-These are Hebrew-language medical forms, often scanned or photographed.
-They contain printed text, handwriting, rubber stamps, and barcode stickers.
-The same form type is used by multiple health funds (Clalit, Maccabi, Meuhedet, Leumit)
-and hospitals — each with a different layout.
-Personal details (name, ID) appear in a patient info section, usually near the top.
+Organize what you see into sections:
+- TOP SECTION (header, organization name, form title)
+- PATIENT INFO (any names, ID numbers, dates of birth)
+- FORM FIELDS (labels and their values)
+- STICKERS (barcode stickers and what's written on/near them)
+- STAMPS (rubber stamps, especially any that say התקבל/received)
+- HANDWRITING (any handwritten additions)
+- BOTTOM SECTION (signatures, notes)
 
-═══════════════════════════════════════════════════════
-FIELDS TO EXTRACT:
-═══════════════════════════════════════════════════════
+Be thorough. Include Hebrew text exactly as written.
+Do not interpret yet — just transcribe everything you see.
+"""
 
-1. שם_פרטי  (patient first name)
-   - The PATIENT'S first name only — not the doctor, not the clinic name
-   - Usually printed or handwritten next to the label "שם פרטי" or "שם"
-   - Hebrew text (occasionally English transliteration)
-   - Return null if you are not at least 85% confident
-   - Return null if it is a doctor's name or organization name
+# ─────────────────────────────────────────────────────────────────────────────
+# STEP 2 — Extract structured fields from the transcribed text
+# ─────────────────────────────────────────────────────────────────────────────
 
-2. שם_משפחה  (patient last name / family name)
-   - The PATIENT'S family name only
-   - Usually next to "שם משפחה" or "שם" label
-   - Hebrew text (occasionally English)
-   - Return null if you are not at least 85% confident
+STEP2_EXTRACT_PROMPT = f"""You are a data extraction engine for Israeli medical commitment forms.
 
-3. תעודת_זהות  (Israeli ID number)
-   - Exactly 8 or 9 digits, nothing else
-   - Usually labeled "ת.ז.", "מספר זהות", or "תעודת זהות"
-   - Valid example: "123456789"
-   - NEVER put a date, phone number, or reference number here
-   - Return null if you don't see a clear 8-9 digit number next to an ID label
+You will receive a text transcription of a medical form.
+Extract the following 7 fields and return ONLY valid JSON.
 
-4. מספר_מרכזי  (central lab number — list)
-   - A number printed on a STICKER that has the word "מרכזי" printed beside it
-   - Sometimes written by hand below the sticker
-   - There can be MULTIPLE — return ALL of them as a list
-   - Do NOT include dates, ID numbers, or commitment numbers
-   - Return [] if not found
+═══════════════════════════════════════════════
+CRITICAL: NEVER invent data. If not found → null.
+A blank field is better than a wrong value.
+═══════════════════════════════════════════════
 
-5. תאריך_קבלה  (sample received date)
-   IMPORTANT: The form contains MULTIPLE dates. You want ONLY the received date:
-   ✓ CORRECT: A date INSIDE a rectangular or round rubber stamp that says "התקבל"
-   ✓ CORRECT: A date written by hand next to a barcode sticker or signature
-   ✗ WRONG: Patient's date of birth
-   ✗ WRONG: Form print/issue date (usually at the top)
-   ✗ WRONG: Requested test date
-   ✗ WRONG: Any pre-printed date that is part of the form template
-   Format: DD/MM/YYYY (example: 21/08/2026)
-   Return null if no "התקבל" stamp or handwritten received date is found
+FIELDS:
 
-6. גורם_שולח  (sending organization)
-   - The health fund or hospital that sent the sample
-   - Look for a LOGO, large header text, or organization name at the TOP of the form
-   - Must be EXACTLY one of these options:
-{_SENDERS_LIST}
-   - Return null if you cannot clearly identify the organization — do NOT guess
+1. שם_פרטי (patient first name)
+   - The PATIENT's first name
+   - May appear next to labels: "שם פרטי", "שם", "מנוי", "מעבדה/מנוי", "לכבוד", "שם החולה"
+   - In Wolfson/hospital forms: handwritten in Hebrew next to the word "שם" near the top
+   - Look carefully for handwritten Hebrew text — it may be unclear
+   - Hebrew name, 1-3 words
+   - null if confidence < 0.85
 
-7. מספר_התחייבות  (commitment/requisition number — list)
-   - A number appearing next to the label "מספר התחייבות", "דרישה", or "דגימה"
-   - OR a number printed on a barcode sticker labeled "התחייבות" or "דרישה"
-   - There can be MULTIPLE — return ALL as a list
-   - Do NOT confuse with: מספר מרכזי, ID number, phone number
-   - Return [] if not found
+2. שם_משפחה (patient family name)
+   - The PATIENT's family/last name
+   - Usually appears next to the first name
+   - In Wolfson hospital forms: handwritten next to "שם" label at top of form
+   - null if confidence < 0.85
 
-═══════════════════════════════════════════════════════
-CONFIDENCE SCALE:
-1.0 = Clearly printed text, 100% certain
-0.9 = Clear handwriting, almost certain
-0.8 = Readable but slight doubt
-0.7 = Guessed some characters
-0.5 = Mostly guessed
-→ Names (שם_פרטי, שם_משפחה): return null if confidence < 0.85
-→ All other fields: return null if confidence < 0.70
-═══════════════════════════════════════════════════════
+3. תעודת_זהות (Israeli ID number)
+   - 8-9 digits only
+   - Labeled: "ת.ז.", "מספר זהות", "ת.ז"
+   - NOT a date, NOT a phone number
+   - null if not clearly an ID number
 
-Return ONLY valid JSON in exactly this format — no explanation, no markdown:
+4. מספר_מרכזי (central lab number — return as list)
+   - Number on a sticker labeled "מרכזי" nearby
+   - Or handwritten next to word "מרכזי"
+   - Multiple values possible — return ALL as list
+   - [] if not found
+
+5. תאריך_קבלה (received date)
+   - Date INSIDE a stamp that says "התקבל" / "נתקבל"
+   - OR a handwritten date added later (not pre-printed)
+   - Format: DD/MM/YYYY
+   - NOT the form date, NOT birth date, NOT test date
+   - null if no received stamp found
+
+6. גורם_שולח (sending organization)
+   - Organization name at the TOP of the form (header/logo area)
+   - Must match one of: {_SENDERS_LIST}
+   - null if unclear
+
+7. מספר_התחייבות (commitment number — return as list)
+   - Number next to label: "מספר התחייבות", "התחייבות", "דרישה", "דגימה", "מס'"
+   - OR number on barcode sticker labeled "התחייבות"/"דרישה"
+   - Multiple values possible — return ALL as list
+   - [] if not found
+
+Return ONLY this JSON (no markdown, no explanation):
 {{
   "שם_פרטי":          {{"value": "ישראל",        "confidence": 0.95}},
   "שם_משפחה":         {{"value": "ישראלי",       "confidence": 0.95}},
@@ -106,13 +103,15 @@ Return ONLY valid JSON in exactly this format — no explanation, no markdown:
   "גורם_שולח":        {{"value": "כללית",        "confidence": 0.95}},
   "מספר_התחייבות":    {{"value": ["4034345113"], "confidence": 0.85}}
 }}
-
-If a field is not found or unclear, use null (or [] for list fields).
-NO ```json``` wrapper. NO explanations. JSON only.
 """
 
-RETRY_PROMPT = """Return ONLY valid JSON. Use null for missing/unclear fields, [] for missing lists.
-No explanation, no markdown, just JSON:
+# ─────────────────────────────────────────────────────────────────────────────
+# Legacy single-step prompts (fallback)
+# ─────────────────────────────────────────────────────────────────────────────
+
+EXTRACTION_PROMPT = STEP2_EXTRACT_PROMPT  # backward compat
+
+RETRY_PROMPT = """Return ONLY valid JSON. null for missing, [] for missing lists:
 
 {
   "שם_פרטי":          {"value": null, "confidence": 0.0},

@@ -183,6 +183,38 @@ def _process_single_page(
     logger.debug("מחיל סימוני ביטחון")
     flagged = apply_confidence_flags(normalized)
 
+    # שלב 4: אם שם חסר — ניסיון ממוקד עם crop
+    name_missing = (
+        not flagged.get("שם_פרטי", {}).get("value") or
+        not flagged.get("שם_משפחה", {}).get("value")
+    )
+    if name_missing:
+        logger.debug("שם חסר — מנסה חילוץ ממוקד")
+        try:
+            from app.name_extractor import extract_name_focused
+            name_result = extract_name_focused(page_image)
+            for field in ("שם_פרטי", "שם_משפחה"):
+                extracted = name_result.get(field, {})
+                if extracted.get("value") and not flagged.get(field, {}).get("value"):
+                    # מחיל סטטוס על התוצאה החדשה
+                    from app.confidence_handler import _determine_status
+                    from config.fields import FIELDS
+                    status = _determine_status(
+                        field_key  = field,
+                        field_def  = FIELDS[field],
+                        value      = extracted["value"],
+                        confidence = extracted["confidence"],
+                        has_error  = False,
+                    )
+                    flagged[field] = {
+                        "value":      extracted["value"],
+                        "confidence": extracted["confidence"],
+                        "status":     status,
+                    }
+                    logger.info(f"שם חולץ מ-crop: {field} = {extracted['value']}")
+        except Exception as e:
+            logger.debug(f"חילוץ שם ממוקד נכשל: {e}")
+
     # הוספת metadata
     flagged["source_file"] = source_file
     flagged["page"]        = page_num
