@@ -108,10 +108,12 @@ def _step2_extract(model: Any, raw_text: str) -> ExtractionResult:
                 full_prompt,
                 generation_config=genai.types.GenerationConfig(
                     max_output_tokens=1024,
+                    response_mime_type="application/json",  # ✨ הוספת JSON mode
                 )
             )
             
             raw_json = response.text if response else ""
+            logger.info(f"תגובת המודל (ניסיון {attempt + 1}):\n{raw_json}")  # ✨ לוג מלא
             parsed   = _parse_json(raw_json)
             if parsed is not None:
                 logger.info("חילוץ הושלם")
