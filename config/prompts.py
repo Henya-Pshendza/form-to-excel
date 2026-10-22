@@ -31,7 +31,8 @@ READ EVERYTHING IN THIS ORDER:
    - Look for "שם פרטי" / "שם" / "מנוי" labels
    - Look for "שם משפחה" / "משפחה" labels  
    - Names are often handwritten in cursive Hebrew near the top
-   - ⚠️ ONLY transcribe if clearly visible — if unclear/illegible, mark as "(illegible)"
+   - Try your best even if handwriting is unclear — transcribe what you can see
+   - Only mark "(illegible)" if truly unreadable
 
 📍 STICKERS (2 types - READ CAREFULLY):
    
@@ -60,14 +61,14 @@ READ EVERYTHING IN THIS ORDER:
 OUTPUT FORMAT — organize clearly:
 ```
 === HANDWRITTEN NAMES ===
-שם פרטי: [transcribe exactly OR "(illegible)" if unreadable]
-שם משפחה: [transcribe exactly OR "(illegible)" if unreadable]
+שם פרטי: [transcribe - try your best even if unclear]
+שם משפחה: [transcribe - try your best even if unclear]
 
 === HANDWRITTEN ID ===
 ת.ז.: [8-9 digits, usually handwritten]
 
 === STICKERS - מרכזי ===
-[List stickers that have "מרכזי" label]
+[List stickers that have "מרכזי" label on/near them]
 Number: [digits]
 
 === STICKERS - התחייבות (no label) ===
@@ -79,13 +80,13 @@ Number: [digits]
 Number: [digits]
 
 === STAMPS ===
-התקבל: [date if exists]
+התקבל: [DD/MM/YYYY date if exists]
 
 === ORGANIZATION ===
-[כללית/מכבי/מאוחדת/לאומית]
+[כללית/מכבי/מאוחדת/לאומית if visible in header/logo]
 ```
 
-⚠️ CRITICAL: Names only if clearly readable — empty if illegible is better than wrong!"""
+⚠️ Try to extract everything you can see — use lower confidence for unclear items."""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 2 — Extract structured fields from the transcribed text
@@ -97,10 +98,11 @@ STEP2_EXTRACT_PROMPT = f"""Extract 7 fields from the transcribed Israeli medical
 
 1️⃣ NAMES (שם_פרטי, שם_משפחה):
    • Extract from "HANDWRITTEN NAMES" section
-   • ⚠️ CRITICAL: If marked "(illegible)" or missing → USE NULL (do NOT guess!)
-   • Empty/null is BETTER than wrong name
-   • Only extract if clearly visible in the text
-   • Confidence 0.65-0.85 for clear names
+   • If marked "(illegible)" → still try to extract with lower confidence (0.50-0.60)
+   • If completely missing from text → null
+   • Hebrew patient names only (not organization names)
+   • Clear names: confidence 0.70-0.90
+   • Unclear/partial names: confidence 0.50-0.65
 
 2️⃣ תעודת_זהות:
    • Usually HANDWRITTEN (not printed)
@@ -129,14 +131,14 @@ STEP2_EXTRACT_PROMPT = f"""Extract 7 fields from the transcribed Israeli medical
    • If ONE number appears twice in text → include ONCE in the correct field
    • If truly 2+ different numbers → include ALL in list
 
-4️⃣ CONFIDENCE:
-   • Clear handwritten names: 0.70-0.85
-   • Slightly unclear names: 0.55-0.70
-   • Illegible names: 0.0 + null (DO NOT GUESS!)
-   • Sticker numbers (clear): 0.85-0.95
-   • Handwritten ID: 0.65-0.85
-   • Printed text: 0.85-0.95
-   • Missing completely: 0.0 + null
+4️⃣ CONFIDENCE LEVELS:
+   • Crystal clear printed: 0.90-0.95
+   • Clear handwritten: 0.70-0.85
+   • Readable but unclear handwriting: 0.50-0.65
+   • Very hard to read (best guess): 0.45-0.55
+   • Completely missing/illegible: 0.0 + null
+   
+   ⚠️ Use 0.50-0.65 for unclear Hebrew handwriting (don't give up too easily!)
 
 📋 FIELDS:
 

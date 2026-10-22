@@ -265,13 +265,13 @@ def _validate(raw: dict) -> ExtractionResult:
             if not value:
                 confidence = 0.0
 
-        # ✨ סף confidence - שמות קפדניים יותר (עדיף ריק מאשר שגוי!)
+        # ✨ סף confidence מאוזן
         if field_key in ("שם_פרטי", "שם_משפחה"):
-            min_conf = 0.55  # ✨ שמות: יותר קפדני - אל תשאר מומצאים!
+            min_conf = 0.50  # ✨ שמות: מאוזן - לא מומצא אבל לא דוחה הכל
         elif field_key == "תעודת_זהות":
-            min_conf = 0.55  # ✨ ת.ז. כתובה ביד - דורש קריאה ברורה
+            min_conf = 0.45  # ✨ ת.ז. כתובה ביד - קצת יותר מתיר
         else:
-            min_conf = 0.50
+            min_conf = 0.45  # ✨ שאר השדות: מתיר יותר
             
         if confidence < min_conf:
             value      = [] if field_def["multi"] else None
