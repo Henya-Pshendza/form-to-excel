@@ -1,7 +1,7 @@
 """
 app/vision_extractor.py
 -----------------------
-Two-step extraction with Claude 3.5 Sonnet Vision:
+Two-step extraction with Gemini Vision:
   Step 1 — reads all text from the image
   Step 2 — extracts structured fields from the raw text
 """
@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-import anthropic
+import google.generativeai as genai
 
 from config.fields import FIELDS
 from config.prompts import STEP1_READ_PROMPT, STEP2_EXTRACT_PROMPT, RETRY_PROMPT
@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 
 MAX_RETRIES         = 3
 RETRY_DELAY_SECONDS = 2
-MODEL_NAME          = "claude-3-sonnet-20240229"  # ✨ Claude 3 Sonnet (גרסה יציבה)
+MODEL_NAME          = "gemini-1.5-pro"  # ✨ Gemini Pro - גרסה יציבה
 
 ExtractionResult = dict[str, dict[str, Any]]
 
@@ -46,50 +46,45 @@ def build_empty_result() -> ExtractionResult:
 
 
 def extract_from_image(base64_image: str) -> ExtractionResult:
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise EnvironmentError("ANTHROPIC_API_KEY לא מוגדר ב-.env")
+        raise EnvironmentError("GEMINI_API_KEY לא מוגדר ב-.env")
 
-    client = anthropic.Anthropic(api_key=api_key)
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(MODEL_NAME)
 
     # שלב 1: קריאת כל הטקסט
-    raw_text = _step1_read(client, base64_image)
+    raw_text = _step1_read(model, base64_image)
     if not raw_text:
         logger.warning("שלב 1 נכשל — עובר לחילוץ ישיר")
-        return _extract_direct(client, base64_image)
+        return _extract_direct(model, base64_image)
 
     # שלב 2: חילוץ שדות מהטקסט
-    return _step2_extract(client, raw_text)
+    return _step2_extract(model, raw_text)
 
 
-def _step1_read(client: anthropic.Anthropic, base64_image: str) -> str | None:
+def _step1_read(model: Any, base64_image: str) -> str | None:
     """שלב 1: קריאת כל הטקסט מהתמונה."""
     try:
-        logger.info("שלב 1 — קריאת טקסט (Claude 3.5)")
+        logger.info("שלב 1 — קריאת טקסט (Gemini)")
         
-        response = client.messages.create(
-            model=MODEL_NAME,
-            max_tokens=2500,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/jpeg",
-                            "data": base64_image,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": STEP1_READ_PROMPT
-                    }
-                ],
-            }]
+        # המרת base64 לבתים
+        image_bytes = base64.b64decode(base64_image)
+        
+        # יצירת חלק תמונה
+        image_part = {
+            "mime_type": "image/jpeg",
+            "data": image_bytes
+        }
+        
+        response = model.generate_content(
+            [STEP1_READ_PROMPT, image_part],
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=2500,
+            )
         )
         
-        text = response.content[0].text if response.content else ""
+        text = response.text if response else ""
         logger.info(f"שלב 1 הושלם — {len(text)} תווים")
         logger.info(f"טקסט מלא מהמודל:\n{text}")
         return text
@@ -98,7 +93,7 @@ def _step1_read(client: anthropic.Anthropic, base64_image: str) -> str | None:
         return None
 
 
-def _step2_extract(client: anthropic.Anthropic, raw_text: str) -> ExtractionResult:
+def _step2_extract(model: Any, raw_text: str) -> ExtractionResult:
     """שלב 2: חילוץ שדות מהטקסט הגולמי."""
     prompts = [STEP2_EXTRACT_PROMPT, RETRY_PROMPT, RETRY_PROMPT]
     last_error: Exception | None = None
@@ -109,16 +104,14 @@ def _step2_extract(client: anthropic.Anthropic, raw_text: str) -> ExtractionResu
             logger.info(f"שלב 2 — ניסיון {attempt + 1}/{MAX_RETRIES}")
             full_prompt = f"{prompt}\n\nFORM TEXT:\n{raw_text}"
 
-            response = client.messages.create(
-                model=MODEL_NAME,
-                max_tokens=1024,
-                messages=[{
-                    "role": "user",
-                    "content": full_prompt
-                }]
+            response = model.generate_content(
+                full_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=1024,
+                )
             )
             
-            raw_json = response.content[0].text if response.content else ""
+            raw_json = response.text if response else ""
             parsed   = _parse_json(raw_json)
             if parsed is not None:
                 logger.info("חילוץ הושלם")
@@ -136,7 +129,7 @@ def _step2_extract(client: anthropic.Anthropic, raw_text: str) -> ExtractionResu
     return empty
 
 
-def _extract_direct(client: anthropic.Anthropic, base64_image: str) -> ExtractionResult:
+def _extract_direct(model: Any, base64_image: str) -> ExtractionResult:
     """Fallback: חילוץ ישיר מהתמונה."""
     prompts = [STEP2_EXTRACT_PROMPT, RETRY_PROMPT, RETRY_PROMPT]
     last_error: Exception | None = None
@@ -144,29 +137,20 @@ def _extract_direct(client: anthropic.Anthropic, base64_image: str) -> Extractio
     for attempt in range(MAX_RETRIES):
         prompt = prompts[min(attempt, len(prompts) - 1)]
         try:
-            response = client.messages.create(
-                model=MODEL_NAME,
-                max_tokens=1024,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": base64_image,
-                            },
-                        },
-                        {
-                            "type": "text",
-                            "text": prompt
-                        }
-                    ],
-                }]
+            image_bytes = base64.b64decode(base64_image)
+            image_part = {
+                "mime_type": "image/jpeg",
+                "data": image_bytes
+            }
+            
+            response = model.generate_content(
+                [prompt, image_part],
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=1024,
+                )
             )
             
-            raw_json = response.content[0].text if response.content else ""
+            raw_json = response.text if response else ""
             parsed   = _parse_json(raw_json)
             if parsed is not None:
                 return _validate(parsed)
