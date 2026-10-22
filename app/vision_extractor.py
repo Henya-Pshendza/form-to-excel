@@ -1,7 +1,7 @@
 """
 app/vision_extractor.py
 -----------------------
-Two-step extraction with GPT-4o:
+Two-step extraction with Gemini Vision:
   Step 1 — reads all text from the image
   Step 2 — extracts structured fields from the raw text
 """
@@ -12,11 +12,12 @@ import json
 import os
 import re
 import time
+import base64
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from openai import OpenAI, RateLimitError
+import google.generativeai as genai
 
 from config.fields import FIELDS
 from config.prompts import STEP1_READ_PROMPT, STEP2_EXTRACT_PROMPT, RETRY_PROMPT
@@ -29,7 +30,7 @@ logger = get_logger(__name__)
 
 MAX_RETRIES         = 3
 RETRY_DELAY_SECONDS = 2
-MODEL               = "gpt-4o"
+MODEL_NAME          = "gemini-1.5-flash"  # ✨ או gemini-1.5-pro לדיוק גבוה יותר
 
 ExtractionResult = dict[str, dict[str, Any]]
 
@@ -45,52 +46,52 @@ def build_empty_result() -> ExtractionResult:
 
 
 def extract_from_image(base64_image: str) -> ExtractionResult:
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise EnvironmentError("OPENAI_API_KEY לא מוגדר")
+        raise EnvironmentError("GEMINI_API_KEY לא מוגדר ב-.env")
 
-    client = OpenAI(api_key=api_key)
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(MODEL_NAME)
 
     # שלב 1: קריאת כל הטקסט
-    raw_text = _step1_read(client, base64_image)
+    raw_text = _step1_read(model, base64_image)
     if not raw_text:
         logger.warning("שלב 1 נכשל — עובר לחילוץ ישיר")
-        return _extract_direct(client, base64_image)
+        return _extract_direct(model, base64_image)
 
     # שלב 2: חילוץ שדות מהטקסט
-    return _step2_extract(client, raw_text)
+    return _step2_extract(model, raw_text)
 
 
-def _step1_read(client: OpenAI, base64_image: str) -> str | None:
+def _step1_read(model: Any, base64_image: str) -> str | None:
     """שלב 1: קריאת כל הטקסט מהתמונה."""
     try:
-        logger.info("שלב 1 — קריאת טקסט")
-        response = client.chat.completions.create(
-            model      = MODEL,
-            max_tokens = 2500,  # ✨ הגדלה לתמיכה בפרומפט הארוך
-            temperature= 0.3,   # ✨ העלאה ל-0.3 לכתב יד מאתגר
-            top_p      = 0.95,  # ✨ מעט יותר מגוון
-            messages   = [{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": STEP1_READ_PROMPT},
-                    {"type": "image_url", "image_url": {
-                        "url":    f"data:image/jpeg;base64,{base64_image}",
-                        "detail": "high",
-                    }},
-                ],
-            }],
+        logger.info("שלב 1 — קריאת טקסט (Gemini)")
+        
+        # המרת base64 לבתים
+        image_bytes = base64.b64decode(base64_image)
+        
+        response = model.generate_content(
+            [
+                STEP1_READ_PROMPT,
+                {"mime_type": "image/jpeg", "data": image_bytes}
+            ],
+            generation_config={
+                "temperature": 0.3,
+                "max_output_tokens": 2500,
+            }
         )
-        text = response.choices[0].message.content or ""
+        
+        text = response.text if response else ""
         logger.info(f"שלב 1 הושלם — {len(text)} תווים")
-        logger.info(f"טקסט מלא מהמודל:\n{text}")  # ✨ לוג מלא לזיהוי בעיה
+        logger.info(f"טקסט מלא מהמודל:\n{text}")
         return text
     except Exception as e:
         logger.error(f"שגיאה בשלב 1: {e}")
         return None
 
 
-def _step2_extract(client: OpenAI, raw_text: str) -> ExtractionResult:
+def _step2_extract(model: Any, raw_text: str) -> ExtractionResult:
     """שלב 2: חילוץ שדות מהטקסט הגולמי."""
     prompts = [STEP2_EXTRACT_PROMPT, RETRY_PROMPT, RETRY_PROMPT]
     last_error: Exception | None = None
@@ -101,14 +102,16 @@ def _step2_extract(client: OpenAI, raw_text: str) -> ExtractionResult:
             logger.info(f"שלב 2 — ניסיון {attempt + 1}/{MAX_RETRIES}")
             full_prompt = f"{prompt}\n\nFORM TEXT:\n{raw_text}"
 
-            response = client.chat.completions.create(
-                model           = MODEL,
-                max_tokens      = 1024,
-                temperature     = 0,
-                response_format = {"type": "json_object"},  # ✨ הוספת JSON mode
-                messages        = [{"role": "user", "content": full_prompt}],
+            response = model.generate_content(
+                full_prompt,
+                generation_config={
+                    "temperature": 0,
+                    "max_output_tokens": 1024,
+                    "response_mime_type": "application/json",
+                }
             )
-            raw_json = response.choices[0].message.content or ""
+            
+            raw_json = response.text if response else ""
             parsed   = _parse_json(raw_json)
             if parsed is not None:
                 logger.info("חילוץ הושלם")
@@ -116,10 +119,6 @@ def _step2_extract(client: OpenAI, raw_text: str) -> ExtractionResult:
 
             last_error = ValueError("JSON פגום")
 
-        except RateLimitError:
-            wait = RETRY_DELAY_SECONDS * (attempt + 1) * 2
-            logger.warning(f"Rate limit — {wait}s")
-            time.sleep(wait)
         except Exception as e:
             logger.error(f"שגיאה: {e}")
             last_error = e
@@ -130,7 +129,7 @@ def _step2_extract(client: OpenAI, raw_text: str) -> ExtractionResult:
     return empty
 
 
-def _extract_direct(client: OpenAI, base64_image: str) -> ExtractionResult:
+def _extract_direct(model: Any, base64_image: str) -> ExtractionResult:
     """Fallback: חילוץ ישיר מהתמונה."""
     prompts = [STEP2_EXTRACT_PROMPT, RETRY_PROMPT, RETRY_PROMPT]
     last_error: Exception | None = None
@@ -138,30 +137,26 @@ def _extract_direct(client: OpenAI, base64_image: str) -> ExtractionResult:
     for attempt in range(MAX_RETRIES):
         prompt = prompts[min(attempt, len(prompts) - 1)]
         try:
-            response = client.chat.completions.create(
-                model           = MODEL,
-                max_tokens      = 1024,
-                temperature     = 0,
-                response_format = {"type": "json_object"},  # ✨ הוספת JSON mode
-                messages        = [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {
-                            "url":    f"data:image/jpeg;base64,{base64_image}",
-                            "detail": "high",
-                        }},
-                    ],
-                }],
+            image_bytes = base64.b64decode(base64_image)
+            
+            response = model.generate_content(
+                [
+                    prompt,
+                    {"mime_type": "image/jpeg", "data": image_bytes}
+                ],
+                generation_config={
+                    "temperature": 0,
+                    "max_output_tokens": 1024,
+                    "response_mime_type": "application/json",
+                }
             )
-            raw_json = response.choices[0].message.content or ""
+            
+            raw_json = response.text if response else ""
             parsed   = _parse_json(raw_json)
             if parsed is not None:
                 return _validate(parsed)
             last_error = ValueError("JSON פגום")
 
-        except RateLimitError:
-            time.sleep(RETRY_DELAY_SECONDS * (attempt + 1) * 2)
         except Exception as e:
             last_error = e
             time.sleep(RETRY_DELAY_SECONDS)

@@ -42,200 +42,186 @@ logger = get_logger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="מטפסי התחייבות לאקסל",
-    page_icon="🧪",
+    page_title="מטפסי התחייבות → אקסל",
+    page_icon="📋",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;700&display=swap');
 
-    /* ── איפוס בסיסי ── */
-    html, body, .main, .stApp, .block-container {
-        direction: rtl;
-        text-align: right;
-        font-family: 'Heebo', 'Segoe UI', Arial, sans-serif;
-        background-color: #ffffff;
-        color: #1c2b3a;
-        font-size: 14px;
-        line-height: 1.6;
-    }
+    /* ══ בסיס ══ */
+    * { font-family: 'Assistant', -apple-system, sans-serif !important; }
+    html, body, .main, .stApp { direction: rtl; background: #fafafa; color: #202124; }
+    .block-container { max-width: 1100px !important; padding: 2rem 1rem !important; }
 
-    /* ── כותרות ── */
-    h1 {
-        font-size: 20px;
-        font-weight: 600;
-        color: #1c2b3a;
-        letter-spacing: 0;
-        margin-bottom: 2px;
-    }
-    h2 { font-size: 15px; font-weight: 600; color: #1c2b3a; }
-    h3 { font-size: 13px; font-weight: 600; color: #3a4f63; text-transform: uppercase; letter-spacing: 0.5px; }
-    p, .stMarkdown p { color: #4a5f72; font-size: 13px; }
+    /* ══ כותרת ראשית ══ */
+    h1 { font-size: 32px !important; font-weight: 700 !important; color: #202124 !important; margin-bottom: 8px !important; }
+    .stCaption { color: #5f6368 !important; font-size: 14px !important; margin-bottom: 32px !important; }
 
-    /* ── סרגל צד ── */
-    [data-testid="stSidebar"] {
-        background-color: #f4f6f8;
-        border-left: 1px solid #dde3e9;
-    }
-    [data-testid="stSidebar"] * { color: #1c2b3a !important; }
+    /* ══ סרגל צד ══ */
+    [data-testid="stSidebar"] { background: #fff !important; border-left: 1px solid #e8eaed !important; padding-top: 24px !important; }
+    [data-testid="stSidebar"] h2 { font-size: 18px !important; font-weight: 600 !important; color: #202124 !important; }
     [data-testid="stSidebar"] .stButton > button {
-        background: white !important;
-        color: #1c2b3a !important;
-        border: 1px solid #c8d2dc !important;
-        border-radius: 4px !important;
-        font-size: 13px !important;
-        font-weight: 400 !important;
+        background: #fff !important;
+        border: 1px solid #dadce0 !important;
+        color: #3c4043 !important;
+        border-radius: 8px !important;
+        font-size: 14px !important;
+        height: 40px !important;
+        font-weight: 500 !important;
     }
     [data-testid="stSidebar"] .stButton > button:hover {
-        border-color: #1c4e80 !important;
-        color: #1c4e80 !important;
+        background: #f8f9fa !important;
+        border-color: #1a73e8 !important;
     }
 
-    /* ── כפתורים ── */
+    /* ══ כפתורים ══ */
     .stButton > button {
-        border-radius: 4px !important;
-        font-family: 'Heebo', sans-serif !important;
-        font-size: 13px !important;
+        border-radius: 24px !important;
+        font-size: 14px !important;
         font-weight: 500 !important;
-        padding: 6px 16px !important;
-        transition: background 0.15s, border-color 0.15s !important;
+        height: 44px !important;
+        padding: 0 24px !important;
+        border: none !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 1px 2px rgba(0,0,0,.24) !important;
+        transition: all 0.2s !important;
     }
     .stButton > button[kind="primary"] {
-        background: #1c4e80 !important;
-        border: 1px solid #1c4e80 !important;
+        background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%) !important;
         color: white !important;
-        box-shadow: none !important;
     }
     .stButton > button[kind="primary"]:hover {
-        background: #163d63 !important;
-        border-color: #163d63 !important;
+        box-shadow: 0 3px 6px rgba(0,0,0,.16), 0 3px 6px rgba(0,0,0,.23) !important;
+        transform: translateY(-1px) !important;
     }
     .stButton > button[kind="secondary"] {
         background: white !important;
-        border: 1px solid #c8d2dc !important;
-        color: #1c2b3a !important;
-    }
-    .stButton > button[kind="secondary"]:hover {
-        border-color: #1c4e80 !important;
-        color: #1c4e80 !important;
+        color: #1a73e8 !important;
+        border: 1px solid #dadce0 !important;
     }
 
-    /* ── כפתור הורדה ── */
+    /* ══ כפתור הורדה ══ */
     .stDownloadButton > button {
-        background: #1c6b45 !important;
+        background: #34a853 !important;
         color: white !important;
-        border: 1px solid #1c6b45 !important;
-        border-radius: 4px !important;
-        font-size: 13px !important;
+        border-radius: 24px !important;
+        font-size: 14px !important;
         font-weight: 500 !important;
-        box-shadow: none !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,.12) !important;
     }
     .stDownloadButton > button:hover {
-        background: #155436 !important;
-        border-color: #155436 !important;
+        background: #2d8e47 !important;
+        box-shadow: 0 3px 6px rgba(0,0,0,.16) !important;
     }
 
-    /* ── באנר סיכום ── */
+    /* ══ מטריקות ══ */
+    [data-testid="stMetric"] {
+        background: white !important;
+        border-radius: 12px !important;
+        padding: 20px !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,.08) !important;
+        border: 1px solid #e8eaed !important;
+    }
+    [data-testid="stMetricValue"] { font-size: 32px !important; font-weight: 600 !important; color: #1a73e8 !important; }
+    [data-testid="stMetricLabel"] { font-size: 13px !important; color: #5f6368 !important; text-transform: none !important; }
+
+    /* ══ באנר סיכום ══ */
     .summary-banner {
-        background: #f4f6f8;
-        color: #1c2b3a;
-        padding: 14px 20px;
-        border-radius: 4px;
-        font-size: 14px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 24px 32px;
+        border-radius: 16px;
+        font-size: 16px;
         font-weight: 500;
         text-align: center;
-        margin: 8px 0;
-        direction: rtl;
-        border: 1px solid #dde3e9;
-        border-right: 4px solid #1c4e80;
+        margin: 24px 0;
+        box-shadow: 0 4px 12px rgba(102,126,234,.25);
     }
 
-    /* ── מטריקות ── */
-    [data-testid="stMetric"] {
-        background: #f9fafb;
-        border-radius: 4px;
-        padding: 12px 16px !important;
-        border: 1px solid #dde3e9;
-    }
-    [data-testid="stMetricValue"] {
-        color: #1c2b3a;
-        font-size: 24px !important;
-        font-weight: 600 !important;
-    }
-    [data-testid="stMetricLabel"] {
-        color: #6b7f90;
-        font-size: 12px !important;
-        text-transform: uppercase;
-        letter-spacing: 0.4px;
-    }
-
-    /* ── כרטיסי שדות ── */
+    /* ══ כרטיסי שדות ══ */
     .field-card {
-        border-right: 3px solid #dde3e9;
-        padding: 7px 12px;
-        margin: 3px 0;
-        border-radius: 0 4px 4px 0;
-        direction: rtl;
-        background: #fafbfc;
-        border-top: 1px solid #eef1f4;
-        border-bottom: 1px solid #eef1f4;
-        border-left: none;
+        background: white;
+        border-radius: 12px;
+        padding: 16px;
+        margin: 12px 0;
+        border-left: 4px solid #e8eaed;
+        box-shadow: 0 1px 3px rgba(0,0,0,.08);
+        transition: all 0.2s;
     }
-    .field-ok      { border-right-color: #2e7d52; background: #fafcfb; }
-    .field-low     { border-right-color: #b06a00; background: #fdfaf5; }
-    .field-missing { border-right-color: #a93226; background: #fdf9f9; }
+    .field-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+    .field-ok      { border-left-color: #34a853 !important; }
+    .field-low     { border-left-color: #fbbc04 !important; }
+    .field-missing { border-left-color: #ea4335 !important; }
 
-    /* ── תגיות סטטוס ── */
-    .status-ok      { color: #2e7d52; font-size: 12px; font-weight: 500; }
-    .status-low     { color: #b06a00; font-size: 12px; font-weight: 500; }
-    .status-missing { color: #a93226; font-size: 12px; font-weight: 500; }
-    .status-error   { color: #6b7f90; font-size: 12px; font-weight: 500; }
+    /* ══ תגיות סטטוס ══ */
+    .status-ok      { color: #34a853; font-weight: 500; }
+    .status-low     { color: #f9ab00; font-weight: 500; }
+    .status-missing { color: #ea4335; font-weight: 500; }
+    .status-error   { color: #5f6368; font-weight: 500; }
 
-    /* ── expander ── */
+    /* ══ file uploader ══ */
+    [data-testid="stFileUploader"] {
+        background: white;
+        border: 2px dashed #dadce0;
+        border-radius: 16px;
+        padding: 40px 20px;
+    }
+
+    /* ══ expander ══ */
     [data-testid="stExpander"] {
-        border: 1px solid #dde3e9 !important;
-        border-radius: 4px !important;
+        background: white !important;
+        border: 1px solid #e8eaed !important;
+        border-radius: 12px !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,.08) !important;
+    }
+
+    /* ══ data editor ══ */
+    [data-testid="stDataFrame"] {
+        border-radius: 12px !important;
+        overflow: hidden !important;
+    }
+
+    /* ══ divider ══ */
+    hr { border-color: #e8eaed !important; margin: 32px 0 !important; opacity: 0.6 !important; }
+
+    /* ══ הודעות ══ */
+    .stSuccess {
+        background: #e6f4ea !important;
+        border: 1px solid #34a853 !important;
+        border-radius: 12px !important;
+        color: #137333 !important;
+    }
+    .stWarning {
+        background: #fef7e0 !important;
+        border: 1px solid #f9ab00 !important;
+        border-radius: 12px !important;
+        color: #b06000 !important;
+    }
+    .stError {
+        background: #fce8e6 !important;
+        border: 1px solid #ea4335 !important;
+        border-radius: 12px !important;
+        color: #c5221f !important;
+    }
+    .stInfo {
+        background: #e8f0fe !important;
+        border: 1px solid #1a73e8 !important;
+        border-radius: 12px !important;
+        color: #185abc !important;
+    }
+
+    /* ══ inputs ══ */
+    .stTextInput > div > div, .stSelectbox > div > div {
+        border-radius: 8px !important;
+        border-color: #dadce0 !important;
         background: white !important;
     }
 
-    /* ── divider ── */
-    hr { border-color: #eef1f4 !important; margin: 16px 0 !important; }
-
-    /* ── file uploader ── */
-    [data-testid="stFileUploader"] {
-        background: #fafbfc;
-        border: 1px dashed #c8d2dc;
-        border-radius: 4px;
-        padding: 4px;
-    }
-
-    /* ── data editor ── */
-    [data-testid="stDataFrame"] {
-        border: 1px solid #dde3e9 !important;
-        border-radius: 4px !important;
-    }
-
-    /* ── selectbox / input ── */
-    .stSelectbox > div > div,
-    .stTextInput > div > div {
-        border-radius: 4px !important;
-        border-color: #c8d2dc !important;
-        font-size: 13px !important;
-    }
-
-    /* ── progress bar ── */
-    .stProgress > div > div { background-color: #1c4e80 !important; }
-
-    /* ── success / warning / error ── */
-    .stSuccess { background: #f0f7f2 !important; border: 1px solid #c3dece !important; border-radius: 4px !important; color: #1c5233 !important; }
-    .stWarning { background: #fdf6ec !important; border: 1px solid #f0d9ae !important; border-radius: 4px !important; color: #7d4e0a !important; }
-    .stError   { background: #fdf2f1 !important; border: 1px solid #f0c5c1 !important; border-radius: 4px !important; color: #7d1f1a !important; }
-
-    /* ── caption ── */
-    .stCaption { color: #8a9ab0 !important; font-size: 12px !important; }
+    /* ══ progress bar ══ */
+    .stProgress > div > div > div { background: linear-gradient(90deg, #1a73e8, #34a853) !important; border-radius: 8px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -268,8 +254,8 @@ def _init_state() -> None:
 def main() -> None:
     _init_state()
 
-    st.title("מטפסי התחייבות לאקסל")
-    st.caption("מנוע חילוץ אוטומטי | המעבדה המרכזית לנגיפים | משרד הבריאות")
+    st.title("📋 מטפסי התחייבות → אקסל")
+    st.caption("חילוץ אוטומטי עם Gemini Vision • המעבדה המרכזית לנגיפים")
     st.divider()
 
     _render_sidebar()
@@ -288,12 +274,12 @@ def _render_sidebar() -> None:
     with st.sidebar:
         st.header("הגדרות")
 
-        api_key = os.getenv("OPENAI_API_KEY", "")
-        if api_key and api_key.startswith("sk-"):
-            st.success("✓ OpenAI API Key מוגדר")
+        api_key = os.getenv("GEMINI_API_KEY", "")
+        if api_key:
+            st.success("✅ Gemini API מוגדר")
         else:
-            st.error("✗ OpenAI API Key חסר")
-            st.info("צרי קובץ `.env` עם:\n```\nOPENAI_API_KEY=sk-...\n```")
+            st.error("❌ Gemini API חסר")
+            st.info("הוסיפי ל-`.env`:\n```\nGEMINI_API_KEY=...\n```")
 
         st.divider()
 
@@ -393,7 +379,7 @@ def _run_processing(uploaded_files) -> None:
         # מדידת זמן עיבוד
         start_time = time.time()
 
-        with st.spinner("מעבד טפסים עם GPT-4o Vision..."):
+        with st.spinner("מעבד טפסים עם Gemini Vision..."):
             forms = process_multiple_files(valid_paths, update_progress)
 
         elapsed = time.time() - start_time
