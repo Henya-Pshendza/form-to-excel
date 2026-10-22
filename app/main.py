@@ -241,6 +241,7 @@ def _init_state() -> None:
         "processing_time":  0.0,   # זמן עיבוד בשניות
         "quick_review":     False, # מצב בדיקה מהירה
         "selected_form":    0,     # טופס נבחר לתצוגה
+        "ai_provider":      "gemini",  # ספק AI: openai, gemini, anthropic
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -255,7 +256,16 @@ def main() -> None:
     _init_state()
 
     st.title("📋 מטפסי התחייבות → אקסל")
-    st.caption("חילוץ אוטומטי עם Gemini 3.6 Flash • המעבדה המרכזית לנגיפים")
+    
+    # תצוגת המודל הנוכחי
+    provider_names = {
+        "gemini": "Google Gemini 3.6 Flash",
+        "openai": "OpenAI GPT-4o", 
+        "anthropic": "Anthropic Claude 3.5 Sonnet",
+    }
+    current_model = provider_names.get(st.session_state.ai_provider, "Gemini")
+    
+    st.caption(f"חילוץ אוטומטי עם {current_model} • המעבדה המרכזית לנגיפים")
     st.divider()
 
     _render_sidebar()
@@ -274,12 +284,44 @@ def _render_sidebar() -> None:
     with st.sidebar:
         st.header("הגדרות")
 
-        api_key = os.getenv("GEMINI_API_KEY", "")
+        # ══════════════════════════════════════════════════════════════════
+        # בחירת מודל AI
+        # ══════════════════════════════════════════════════════════════════
+        st.subheader("🤖 מודל AI")
+        
+        provider_options = {
+            "gemini": "🟢 Google Gemini 3.6 Flash",
+            "openai": "🔵 OpenAI GPT-4o",
+            "anthropic": "🟣 Anthropic Claude 3.5 Sonnet",
+        }
+        
+        selected_provider = st.selectbox(
+            "בחרי ספק AI:",
+            options=list(provider_options.keys()),
+            format_func=lambda x: provider_options[x],
+            index=list(provider_options.keys()).index(st.session_state.ai_provider),
+            key="provider_selector",
+        )
+        
+        if selected_provider != st.session_state.ai_provider:
+            st.session_state.ai_provider = selected_provider
+            st.rerun()
+
+        # בדיקת API keys
+        provider_key_map = {
+            "openai": "OPENAI_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+        }
+        
+        current_key = provider_key_map[st.session_state.ai_provider]
+        api_key = os.getenv(current_key, "")
+        
         if api_key:
-            st.success("✅ Gemini API מוגדר")
+            st.success(f"✅ {current_key} מוגדר")
         else:
-            st.error("❌ Gemini API חסר")
-            st.info("הוסיפי ל-Secrets:\n```\nGEMINI_API_KEY = \"...\"\n```")
+            st.error(f"❌ {current_key} חסר")
+            st.info(f"הוסיפי ל-Secrets:\n```\n{current_key} = \"...\"\n```")
 
         st.divider()
 
@@ -350,6 +392,12 @@ def _run_processing(uploaded_files) -> None:
     st.session_state.error_msg  = ""
     temp_paths: list[Path] = []
 
+    provider_names = {
+        "gemini": "Google Gemini 3.6 Flash",
+        "openai": "OpenAI GPT-4o",
+        "anthropic": "Anthropic Claude 3.5 Sonnet",
+    }
+
     try:
         valid_paths: list[Path] = []
         original_names: dict[str, str] = {}  # temp_path → שם מקורי
@@ -379,8 +427,12 @@ def _run_processing(uploaded_files) -> None:
         # מדידת זמן עיבוד
         start_time = time.time()
 
-        with st.spinner("מעבד טפסים עם Gemini 3.6 Flash..."):
-            forms = process_multiple_files(valid_paths, update_progress)
+        with st.spinner(f"מעבד טפסים עם {provider_names.get(st.session_state.ai_provider, 'AI')}..."):
+            forms = process_multiple_files(
+                valid_paths, 
+                update_progress,
+                ai_provider=st.session_state.ai_provider
+            )
 
         elapsed = time.time() - start_time
 

@@ -26,7 +26,7 @@ from dotenv import load_dotenv
 
 from app.pdf_handler import load_input_file
 from app.image_processor import preprocess_image, image_to_base64
-from app.vision_extractor import extract_from_image
+from app.vision_extractor_multi import extract_from_image
 from app.normalizer import normalize_result
 from app.confidence_handler import apply_confidence_flags
 from utils.logger import get_logger
@@ -41,6 +41,7 @@ logger = get_logger(__name__)
 def process_file(
     file_path: str | Path,
     progress_callback=None,
+    ai_provider: str = "gemini",
 ) -> list[dict[str, Any]]:
     """
     מעבד קובץ PDF או תמונה אחד ומחזיר רשימת טפסים מחולצים.
@@ -52,6 +53,7 @@ def process_file(
         file_path:         נתיב לקובץ (PDF / JPG / PNG / ...)
         progress_callback: פונקציה אופציונלית לדיווח התקדמות.
                            חתימה: callback(current: int, total: int, message: str)
+        ai_provider:       ספק AI ("openai", "gemini", "anthropic")
 
     Returns:
         רשימת מילונות, אחד לכל טופס:
@@ -63,7 +65,7 @@ def process_file(
         }
     """
     file_path = Path(file_path)
-    logger.info(f"=== מתחיל עיבוד: {file_path.name} ===")
+    logger.info(f"=== מתחיל עיבוד: {file_path.name} עם {ai_provider} ===")
 
     results: list[dict[str, Any]] = []
 
@@ -90,6 +92,7 @@ def process_file(
                 page_image  = page_image,
                 source_file = file_path.name,
                 page_num    = page_num,
+                ai_provider = ai_provider,
             )
             results.append(form_data)
 
@@ -110,6 +113,7 @@ def process_file(
 def process_multiple_files(
     file_paths: list[str | Path],
     progress_callback=None,
+    ai_provider: str = "gemini",
 ) -> list[dict[str, Any]]:
     """
     מעבד מספר קבצים ומחזיר רשימה מאוחדת של כל הטפסים.
@@ -118,6 +122,7 @@ def process_multiple_files(
         file_paths:        רשימת נתיבים לקבצים
         progress_callback: פונקציה אופציונלית לדיווח התקדמות.
                            חתימה: callback(current: int, total: int, message: str)
+        ai_provider:       ספק AI ("openai", "gemini", "anthropic")
 
     Returns:
         רשימה מאוחדת של כל הטפסים מכל הקבצים
@@ -135,7 +140,7 @@ def process_multiple_files(
         )
 
         try:
-            file_results = process_file(file_path, progress_callback)
+            file_results = process_file(file_path, progress_callback, ai_provider)
             all_results.extend(file_results)
         except Exception as e:
             logger.error(f"כישלון בקובץ {file_name}: {e}")
@@ -158,6 +163,7 @@ def _process_single_page(
     page_image: Any,   # PIL.Image
     source_file: str,
     page_num: int,
+    ai_provider: str = "gemini",
 ) -> dict[str, Any]:
     """
     מעבד דף בודד דרך כל שלבי ה-pipeline.
@@ -166,6 +172,7 @@ def _process_single_page(
         page_image:  PIL.Image של הדף
         source_file: שם קובץ המקור (לתיעוד בלבד)
         page_num:    מספר הדף
+        ai_provider: ספק AI ("openai", "gemini", "anthropic")
 
     Returns:
         מילון עם כל שדות הטופס + metadata
@@ -178,9 +185,9 @@ def _process_single_page(
     logger.debug("מקודד תמונה ל-base64")
     b64_image = image_to_base64(processed)
 
-    # שלב 4: חילוץ עם GPT-4o Vision
-    logger.debug("שולח ל-GPT-4o Vision")
-    raw_extraction = extract_from_image(b64_image)
+    # שלב 4: חילוץ עם AI Vision
+    logger.debug(f"שולח ל-{ai_provider} Vision")
+    raw_extraction = extract_from_image(b64_image, provider=ai_provider)
 
     # שלב 5: נרמול
     logger.debug("מנרמל ערכים")
@@ -190,7 +197,7 @@ def _process_single_page(
     logger.debug("מחיל סימוני ביטחון")
     flagged = apply_confidence_flags(normalized)
 
-    # שלב 4: אם שם חסר — ניסיון ממוקד עם crop
+    # שלב 7: אם שם חסר — ניסיון ממוקד עם crop
     name_missing = (
         not flagged.get("שם_פרטי", {}).get("value") or
         not flagged.get("שם_משפחה", {}).get("value")

@@ -11,8 +11,10 @@ Pillow>=10.0.0
 opencv-python-headless>=4.8.0.74
 numpy>=1.26.0
 
-# LLM Vision — Gemini
-google-generativeai>=0.3.0
+# LLM Vision — Multi-Provider Support
+google-generativeai>=0.3.0  # Gemini
+openai>=1.0.0               # OpenAI GPT-4o
+anthropic>=0.18.0           # Claude
 python-dotenv>=1.0.0
 
 # ייצוא אקסל
