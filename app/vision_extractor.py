@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 
 MAX_RETRIES         = 3
 RETRY_DELAY_SECONDS = 2
-MODEL_NAME          = "gemini-1.5-pro"  # ✨ Gemini Pro - גרסה יציבה
+MODEL_NAME          = "gemini-3.6-flash"  # ✨ Gemini 3.6 Flash (2026)
 
 ExtractionResult = dict[str, dict[str, Any]]
 

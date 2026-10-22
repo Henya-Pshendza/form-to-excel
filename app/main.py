@@ -255,7 +255,7 @@ def main() -> None:
     _init_state()
 
     st.title("📋 מטפסי התחייבות → אקסל")
-    st.caption("חילוץ אוטומטי עם Gemini Pro • המעבדה המרכזית לנגיפים")
+    st.caption("חילוץ אוטומטי עם Gemini 3.6 Flash • המעבדה המרכזית לנגיפים")
     st.divider()
 
     _render_sidebar()
@@ -379,7 +379,7 @@ def _run_processing(uploaded_files) -> None:
         # מדידת זמן עיבוד
         start_time = time.time()
 
-        with st.spinner("מעבד טפסים עם Gemini Pro..."):
+        with st.spinner("מעבד טפסים עם Gemini 3.6 Flash..."):
             forms = process_multiple_files(valid_paths, update_progress)
 
         elapsed = time.time() - start_time
