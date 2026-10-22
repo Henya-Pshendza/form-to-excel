@@ -339,20 +339,20 @@ def _init_state() -> None:
 def main() -> None:
     _init_state()
 
-    # טעינת לוגו
-    logo_path = Path(__file__).parent.parent / "assets" / "logo.png"
-    
     # כותרת עם לוגו
-    col_logo, col_title = st.columns([1, 11])
-    
-    with col_logo:
-        if logo_path.exists():
-            st.image(str(logo_path), width=70)
-        else:
-            st.markdown('<div style="width:70px;height:70px;"></div>', unsafe_allow_html=True)
+    col_title, col_logo = st.columns([11, 1])
     
     with col_title:
-        st.markdown('<h1 style="margin-top:10px;">מטפסי התחייבות → אקסל</h1>', unsafe_allow_html=True)
+        st.markdown("""
+        <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 0;">
+            <h1 style="margin: 0; padding: 0;">מטפסי התחייבות → אקסל</h1>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col_logo:
+        logo_path = Path(__file__).parent.parent / "assets" / "logo.png"
+        if logo_path.exists():
+            st.image(str(logo_path), width=80)
     
     # תצוגת המודל הנוכחי
     provider_names = {
