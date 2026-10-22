@@ -55,47 +55,60 @@ st.markdown("""
     * { font-family: 'Assistant', -apple-system, sans-serif !important; }
     html, body, .main, .stApp { 
         direction: rtl; 
-        background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%);
-        color: #1a1a1a; 
+        background: linear-gradient(to bottom, #f0f4f8 0%, #ffffff 100%);
+        color: #1a202c; 
     }
     .block-container { 
         max-width: 1200px !important; 
-        padding: 3rem 2rem !important; 
+        padding: 2rem 2rem 3rem 2rem !important; 
     }
 
-    /* ══ כותרת ראשית ══ */
+    /* ══ כותרת עם לוגו ══ */
+    .header-container {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        margin-bottom: 0.5rem;
+    }
+    .logo-img {
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
     h1 { 
-        font-size: 38px !important; 
+        font-size: 36px !important; 
         font-weight: 300 !important; 
-        color: #1a1a1a !important; 
-        margin-bottom: 0.5rem !important;
+        color: #1a202c !important; 
+        margin: 0 !important;
         letter-spacing: -0.5px !important;
     }
     .stCaption { 
-        color: #6b7280 !important; 
+        color: #718096 !important; 
         font-size: 15px !important; 
         font-weight: 400 !important;
         margin-bottom: 2.5rem !important; 
+        margin-right: 90px !important;
     }
 
     /* ══ סרגל צד ══ */
     [data-testid="stSidebar"] { 
         background: #ffffff !important; 
-        border-left: 1px solid #e5e7eb !important; 
+        border-left: 1px solid #e2e8f0 !important; 
         padding-top: 2rem !important; 
     }
     [data-testid="stSidebar"] h2 { 
-        font-size: 16px !important; 
+        font-size: 15px !important; 
         font-weight: 600 !important; 
-        color: #1a1a1a !important;
+        color: #2d3748 !important;
         text-transform: uppercase !important;
         letter-spacing: 0.5px !important;
         margin-bottom: 1.5rem !important;
     }
     [data-testid="stSidebar"] .stButton > button {
         background: #ffffff !important;
-        border: 1px solid #d1d5db !important;
-        color: #374151 !important;
+        border: 1px solid #cbd5e0 !important;
+        color: #2d3748 !important;
         border-radius: 6px !important;
         font-size: 14px !important;
         font-weight: 500 !important;
@@ -103,8 +116,8 @@ st.markdown("""
         transition: all 0.15s !important;
     }
     [data-testid="stSidebar"] .stButton > button:hover {
-        background: #f9fafb !important;
-        border-color: #9ca3af !important;
+        background: #f7fafc !important;
+        border-color: #4299e1 !important;
     }
 
     /* ══ כפתורים ראשיים ══ */
@@ -119,34 +132,38 @@ st.markdown("""
         letter-spacing: 0.2px !important;
     }
     .stButton > button[kind="primary"] {
-        background: #1a1a1a !important;
+        background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%) !important;
         color: white !important;
+        box-shadow: 0 2px 4px rgba(66, 153, 225, 0.3) !important;
     }
     .stButton > button[kind="primary"]:hover {
-        background: #2d2d2d !important;
+        background: linear-gradient(135deg, #3182ce 0%, #2c5aa0 100%) !important;
         transform: translateY(-1px) !important;
+        box-shadow: 0 4px 8px rgba(66, 153, 225, 0.4) !important;
     }
     .stButton > button[kind="secondary"] {
         background: white !important;
-        color: #1a1a1a !important;
-        border: 1px solid #d1d5db !important;
+        color: #2d3748 !important;
+        border: 1px solid #cbd5e0 !important;
     }
     .stButton > button[kind="secondary"]:hover {
-        background: #f9fafb !important;
-        border-color: #9ca3af !important;
+        background: #f7fafc !important;
+        border-color: #4299e1 !important;
     }
 
     /* ══ כפתור הורדה ══ */
     .stDownloadButton > button {
-        background: #059669 !important;
+        background: linear-gradient(135deg, #48bb78 0%, #38a169 100%) !important;
         color: white !important;
         border-radius: 6px !important;
         font-size: 15px !important;
         font-weight: 500 !important;
         transition: all 0.15s !important;
+        box-shadow: 0 2px 4px rgba(72, 187, 120, 0.3) !important;
     }
     .stDownloadButton > button:hover {
-        background: #047857 !important;
+        background: linear-gradient(135deg, #38a169 0%, #2f855a 100%) !important;
+        box-shadow: 0 4px 8px rgba(72, 187, 120, 0.4) !important;
     }
 
     /* ══ מטריקות ══ */
@@ -154,16 +171,17 @@ st.markdown("""
         background: white !important;
         border-radius: 8px !important;
         padding: 24px !important;
-        border: 1px solid #e5e7eb !important;
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
     }
     [data-testid="stMetricValue"] { 
         font-size: 36px !important; 
         font-weight: 300 !important; 
-        color: #1a1a1a !important; 
+        color: #4299e1 !important; 
     }
     [data-testid="stMetricLabel"] { 
         font-size: 13px !important; 
-        color: #6b7280 !important; 
+        color: #718096 !important; 
         text-transform: uppercase !important;
         letter-spacing: 0.5px !important;
         font-weight: 500 !important;
@@ -171,9 +189,9 @@ st.markdown("""
 
     /* ══ באנר סיכום ══ */
     .summary-banner {
-        background: white;
-        border: 1px solid #e5e7eb;
-        color: #1a1a1a;
+        background: linear-gradient(135deg, #e6f2ff 0%, #cfe5ff 100%);
+        border: 1px solid #bee3f8;
+        color: #2c5aa0;
         padding: 24px 32px;
         border-radius: 8px;
         font-size: 16px;
@@ -188,97 +206,113 @@ st.markdown("""
         border-radius: 8px;
         padding: 20px;
         margin: 16px 0;
-        border-left: 3px solid #e5e7eb;
-        border: 1px solid #e5e7eb;
+        border-left: 3px solid #e2e8f0;
+        border: 1px solid #e2e8f0;
         transition: all 0.15s;
     }
     .field-card:hover { 
-        border-color: #d1d5db;
+        border-color: #cbd5e0;
         box-shadow: 0 2px 8px rgba(0,0,0,0.04);
     }
-    .field-ok      { border-left: 3px solid #059669 !important; }
-    .field-low     { border-left: 3px solid #f59e0b !important; }
-    .field-missing { border-left: 3px solid #dc2626 !important; }
+    .field-ok      { border-left: 3px solid #48bb78 !important; }
+    .field-low     { border-left: 3px solid #ed8936 !important; }
+    .field-missing { border-left: 3px solid #f56565 !important; }
 
     /* ══ תגיות סטטוס ══ */
-    .status-ok      { color: #059669; font-weight: 500; }
-    .status-low     { color: #f59e0b; font-weight: 500; }
-    .status-missing { color: #dc2626; font-weight: 500; }
-    .status-error   { color: #6b7280; font-weight: 500; }
+    .status-ok      { color: #48bb78; font-weight: 500; }
+    .status-low     { color: #ed8936; font-weight: 500; }
+    .status-missing { color: #f56565; font-weight: 500; }
+    .status-error   { color: #718096; font-weight: 500; }
 
     /* ══ file uploader ══ */
     [data-testid="stFileUploader"] {
         background: white;
-        border: 2px dashed #d1d5db;
+        border: 2px dashed #cbd5e0;
         border-radius: 8px;
         padding: 48px 24px;
     }
     [data-testid="stFileUploader"]:hover {
-        border-color: #9ca3af;
+        border-color: #4299e1;
     }
 
     /* ══ expander ══ */
     [data-testid="stExpander"] {
         background: white !important;
-        border: 1px solid #e5e7eb !important;
+        border: 1px solid #e2e8f0 !important;
         border-radius: 8px !important;
     }
 
     /* ══ divider ══ */
     hr { 
-        border-color: #e5e7eb !important; 
+        border-color: #e2e8f0 !important; 
         margin: 32px 0 !important; 
         opacity: 1 !important; 
     }
 
     /* ══ הודעות ══ */
     .stSuccess {
-        background: #f0fdf4 !important;
-        border: 1px solid #86efac !important;
+        background: #f0fff4 !important;
+        border: 1px solid #9ae6b4 !important;
         border-radius: 8px !important;
-        color: #166534 !important;
+        color: #22543d !important;
     }
     .stWarning {
-        background: #fffbeb !important;
-        border: 1px solid #fcd34d !important;
+        background: #fffaf0 !important;
+        border: 1px solid #fbd38d !important;
         border-radius: 8px !important;
-        color: #92400e !important;
+        color: #7c2d12 !important;
     }
     .stError {
-        background: #fef2f2 !important;
-        border: 1px solid #fca5a5 !important;
+        background: #fff5f5 !important;
+        border: 1px solid #fc8181 !important;
         border-radius: 8px !important;
-        color: #991b1b !important;
+        color: #742a2a !important;
     }
     .stInfo {
-        background: #f0f9ff !important;
-        border: 1px solid #93c5fd !important;
+        background: #ebf8ff !important;
+        border: 1px solid #90cdf4 !important;
         border-radius: 8px !important;
-        color: #1e40af !important;
+        color: #2c5aa0 !important;
     }
 
-    /* ══ inputs ══ */
+    /* ══ inputs - תיקון טקסט לבן ══ */
     .stTextInput > div > div, .stSelectbox > div > div {
         border-radius: 6px !important;
-        border-color: #d1d5db !important;
+        border-color: #cbd5e0 !important;
+        background: white !important;
+    }
+    .stTextInput input, .stSelectbox input {
+        color: #1a202c !important;
         background: white !important;
     }
     .stTextInput > div > div:focus-within, .stSelectbox > div > div:focus-within {
-        border-color: #9ca3af !important;
+        border-color: #4299e1 !important;
+    }
+    
+    /* תיקון ספציפי לשדות עריכה */
+    input[type="text"] {
+        color: #1a202c !important;
+        background-color: #ffffff !important;
+    }
+    
+    /* label של input */
+    .stTextInput label {
+        color: #2d3748 !important;
+        font-weight: 500 !important;
     }
 
     /* ══ selectbox ══ */
     .stSelectbox label {
         font-size: 13px !important;
         font-weight: 500 !important;
-        color: #374151 !important;
+        color: #2d3748 !important;
         text-transform: uppercase !important;
         letter-spacing: 0.3px !important;
     }
 
     /* ══ progress bar ══ */
     .stProgress > div > div > div { 
-        background: #1a1a1a !important; 
+        background: linear-gradient(90deg, #4299e1, #3182ce) !important; 
         border-radius: 4px !important; 
     }
 
@@ -318,7 +352,15 @@ def _init_state() -> None:
 def main() -> None:
     _init_state()
 
-    st.title("מטפסי התחייבות → אקסל")
+    # כותרת עם לוגו
+    st.markdown("""
+    <div class="header-container">
+        <img src="data:image/png;base64,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" class="logo-img" alt="Central Virology Laboratory">
+        <div>
+            <h1>מטפסי התחייבות → אקסל</h1>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     
     # תצוגת המודל הנוכחי
     provider_names = {
