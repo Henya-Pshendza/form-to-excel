@@ -63,19 +63,7 @@ st.markdown("""
         padding: 2rem 2rem 3rem 2rem !important; 
     }
 
-    /* ══ כותרת עם לוגו ══ */
-    .header-container {
-        display: flex;
-        align-items: center;
-        gap: 20px;
-        margin-bottom: 0.5rem;
-    }
-    .logo-img {
-        width: 70px;
-        height: 70px;
-        border-radius: 50%;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
+    /* ══ כותרת ראשית ══ */
     h1 { 
         font-size: 36px !important; 
         font-weight: 300 !important; 
@@ -87,8 +75,7 @@ st.markdown("""
         color: #718096 !important; 
         font-size: 15px !important; 
         font-weight: 400 !important;
-        margin-bottom: 2.5rem !important; 
-        margin-right: 90px !important;
+        margin-bottom: 2.5rem !important;
     }
 
     /* ══ סרגל צד ══ */
@@ -352,15 +339,20 @@ def _init_state() -> None:
 def main() -> None:
     _init_state()
 
+    # טעינת לוגו
+    logo_path = Path(__file__).parent.parent / "assets" / "logo.png"
+    
     # כותרת עם לוגו
-    st.markdown("""
-    <div class="header-container">
-        <img src="data:image/png;base64,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" class="logo-img" alt="Central Virology Laboratory">
-        <div>
-            <h1>מטפסי התחייבות → אקסל</h1>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    col_logo, col_title = st.columns([1, 11])
+    
+    with col_logo:
+        if logo_path.exists():
+            st.image(str(logo_path), width=70)
+        else:
+            st.markdown('<div style="width:70px;height:70px;"></div>', unsafe_allow_html=True)
+    
+    with col_title:
+        st.markdown('<h1 style="margin-top:10px;">מטפסי התחייבות → אקסל</h1>', unsafe_allow_html=True)
     
     # תצוגת המודל הנוכחי
     provider_names = {
