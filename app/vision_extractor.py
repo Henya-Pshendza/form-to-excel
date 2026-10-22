@@ -265,9 +265,11 @@ def _validate(raw: dict) -> ExtractionResult:
             if not value:
                 confidence = 0.0
 
-        # ✨ סף confidence חדש - עוד יותר מתיר לשמות!
+        # ✨ סף confidence - שמות קפדניים יותר (עדיף ריק מאשר שגוי!)
         if field_key in ("שם_פרטי", "שם_משפחה"):
-            min_conf = 0.40  # ✨ ירידה ל-0.40 לשמות (כתב יד קשה מאוד)
+            min_conf = 0.55  # ✨ שמות: יותר קפדני - אל תשאר מומצאים!
+        elif field_key == "תעודת_זהות":
+            min_conf = 0.55  # ✨ ת.ז. כתובה ביד - דורש קריאה ברורה
         else:
             min_conf = 0.50
             

@@ -31,47 +31,61 @@ READ EVERYTHING IN THIS ORDER:
    - Look for "שם פרטי" / "שם" / "מנוי" labels
    - Look for "שם משפחה" / "משפחה" labels  
    - Names are often handwritten in cursive Hebrew near the top
-   - If unclear, write your best attempt + add "(unclear handwriting)"
+   - ⚠️ ONLY transcribe if clearly visible — if unclear/illegible, mark as "(illegible)"
 
-📍 STICKERS (usually white/yellow barcode stickers):
-   - Look for sticker labeled "מרכזי" or near the word מרכזי
-   - Read the number on/near the sticker
-   - Look for multiple stickers — read ALL numbers
+📍 STICKERS (2 types - READ CAREFULLY):
+   
+   TYPE 1 - מרכזי sticker:
+   - White/yellow barcode sticker WITH the word "מרכזי" written on/next to it
+   - Usually 6-8 digits
+   
+   TYPE 2 - התחייבות sticker:
+   - Barcode sticker WITHOUT any label (just barcode + number)
+   - OR sticker with numbers but NO "מרכזי" label
+   - Usually 8-12 digits
+   
+   ⚠️ CRITICAL: Distinguish between these two types!
 
-📍 COMMITMENT NUMBERS:
-   - Look for labels: "מספר התחייבות", "התחייבות", "דרישה", "דגימה"
-   - Usually printed or stamped, NOT on stickers
-   - Different from מרכזי numbers!
+📍 FORM FIELDS (printed text):
+   - מספר התחייבות field — may appear as printed form field labeled "מספר התחייבות"/"התחייבות"/"דרישה"/"דגימה"
+   - ת.ז. field — often handwritten, 8-9 digits (NOT printed field, usually filled in by hand)
 
 📍 STAMPS:
    - "התקבל" stamp — read the date inside it (DD/MM/YYYY format)
    - Any other stamps with dates or numbers
 
-📍 OTHER FIELDS:
-   - ת.ז. (ID number) — 8-9 digits
+📍 OTHER:
    - Organization name (header/logo: כללית, מכבי, מאוחדת, לאומית)
 
 OUTPUT FORMAT — organize clearly:
 ```
 === HANDWRITTEN NAMES ===
-שם פרטי: [transcribe exactly]
-שם משפחה: [transcribe exactly]
+שם פרטי: [transcribe exactly OR "(illegible)" if unreadable]
+שם משפחה: [transcribe exactly OR "(illegible)" if unreadable]
 
-=== STICKERS (מרכזי) ===
-Sticker 1: [number + location description]
-Sticker 2: [number + location description]
+=== HANDWRITTEN ID ===
+ת.ז.: [8-9 digits, usually handwritten]
 
-=== COMMITMENT NUMBERS (התחייבות) ===
-[list all numbers found with their labels]
+=== STICKERS - מרכזי ===
+[List stickers that have "מרכזי" label]
+Number: [digits]
+
+=== STICKERS - התחייבות (no label) ===
+[List barcode stickers WITHOUT "מרכזי" label]
+Number: [digits]
+
+=== FORM FIELDS - התחייבות ===
+[If there's a printed field labeled "מספר התחייבות"]
+Number: [digits]
 
 === STAMPS ===
-[list all stamps and dates]
+התקבל: [date if exists]
 
-=== PRINTED FIELDS ===
-[other fields]
+=== ORGANIZATION ===
+[כללית/מכבי/מאוחדת/לאומית]
 ```
 
-⚠️ CRITICAL: Do NOT skip handwritten Hebrew names even if hard to read!"""
+⚠️ CRITICAL: Names only if clearly readable — empty if illegible is better than wrong!"""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 2 — Extract structured fields from the transcribed text
@@ -82,19 +96,32 @@ STEP2_EXTRACT_PROMPT = f"""Extract 7 fields from the transcribed Israeli medical
 🎯 CRITICAL RULES:
 
 1️⃣ NAMES (שם_פרטי, שם_משפחה):
-   • Extract from "HANDWRITTEN NAMES" section FIRST
-   • Even if marked "(unclear)" — extract it anyway with confidence 0.60-0.75
-   • Hebrew names only (not organization names)
-   • If completely missing → null
+   • Extract from "HANDWRITTEN NAMES" section
+   • ⚠️ CRITICAL: If marked "(illegible)" or missing → USE NULL (do NOT guess!)
+   • Empty/null is BETTER than wrong name
+   • Only extract if clearly visible in the text
+   • Confidence 0.65-0.85 for clear names
 
-2️⃣ מספר_מרכזי vs מספר_התחייבות — DO NOT CONFUSE:
-   ✅ מספר_מרכזי = Numbers from "STICKERS (מרכזי)" section OR near word "מרכזי"
-   ✅ מספר_התחייבות = Numbers from "COMMITMENT NUMBERS" section OR near labels: "התחייבות"/"דרישה"/"דגימה"
+2️⃣ תעודת_זהות:
+   • Usually HANDWRITTEN (not printed)
+   • Extract from "HANDWRITTEN ID" section
+   • 8-9 digits only
+
+3️⃣ מספר_מרכזי vs מספר_התחייבות — CRITICAL DISTINCTION:
    
-   ⚠️ If unclear which is which:
-      - Sticker numbers → מרכזי
-      - Stamped/printed form field numbers → התחייבות
-      - When in doubt: put in BOTH (better duplicate than miss)
+   ✅ מספר_מרכזי:
+      - From "STICKERS - מרכזי" section ONLY
+      - Sticker must have word "מרכזי" on/near it
+      - Usually 6-8 digits
+   
+   ✅ מספר_התחייבות:
+      - From "STICKERS - התחייבות (no label)" section (barcode stickers WITHOUT "מרכזי")
+      - OR from "FORM FIELDS - התחייבות" section (printed form field)
+      - Usually 8-12 digits
+   
+   ⚠️ NEVER put same number in both fields!
+   ⚠️ If sticker has "מרכזי" → goes to מספר_מרכזי ONLY
+   ⚠️ If sticker has NO label (just barcode+number) → goes to מספר_התחייבות ONLY
 
 3️⃣ VALIDATION:
    • מספר_מרכזי: Usually 6-8 digits, often on physical sticker
@@ -103,10 +130,12 @@ STEP2_EXTRACT_PROMPT = f"""Extract 7 fields from the transcribed Israeli medical
    • If truly 2+ different numbers → include ALL in list
 
 4️⃣ CONFIDENCE:
-   • Handwritten Hebrew names: 0.60-0.80 (don't reject!)
-   • Sticker numbers (clear): 0.80-0.95
+   • Clear handwritten names: 0.70-0.85
+   • Slightly unclear names: 0.55-0.70
+   • Illegible names: 0.0 + null (DO NOT GUESS!)
+   • Sticker numbers (clear): 0.85-0.95
+   • Handwritten ID: 0.65-0.85
    • Printed text: 0.85-0.95
-   • Unclear but visible: 0.50-0.70
    • Missing completely: 0.0 + null
 
 📋 FIELDS:
