@@ -51,9 +51,9 @@ MODELS = {
         "display_name": "Google Gemini 3.6 Flash",
     },
     "anthropic": {
-        "name": "claude-3-5-sonnet-20241022",
+        "name": "claude-haiku-4.5-20250514",
         "api_key_env": "ANTHROPIC_API_KEY",
-        "display_name": "Anthropic Claude 3.5 Sonnet",
+        "display_name": "Anthropic Claude Haiku 4.5",
     }
 }
 
