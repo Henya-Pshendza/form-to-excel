@@ -17,9 +17,12 @@ app/pipeline.py
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 from typing import Any
+
+from dotenv import load_dotenv
 
 from app.pdf_handler import load_input_file
 from app.image_processor import preprocess_image, image_to_base64
@@ -27,6 +30,10 @@ from app.vision_extractor import extract_from_image
 from app.normalizer import normalize_result
 from app.confidence_handler import apply_confidence_flags
 from utils.logger import get_logger
+
+# ✨ טעינת משתני סביבה מ-.env
+_PROJECT_ROOT = Path(__file__).parent.parent
+load_dotenv(_PROJECT_ROOT / ".env")
 
 logger = get_logger(__name__)
 

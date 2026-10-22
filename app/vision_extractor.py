@@ -67,9 +67,9 @@ def _step1_read(client: OpenAI, base64_image: str) -> str | None:
         logger.info("שלב 1 — קריאת טקסט")
         response = client.chat.completions.create(
             model      = MODEL,
-            max_tokens = 2000,
-            temperature= 0.1,  # מעט יצירתיות לקריאת כתב יד
-            top_p      = 0.9,
+            max_tokens = 2500,  # ✨ הגדלה לתמיכה בפרומפט הארוך
+            temperature= 0.3,   # ✨ העלאה ל-0.3 לכתב יד מאתגר
+            top_p      = 0.95,  # ✨ מעט יותר מגוון
             messages   = [{
                 "role": "user",
                 "content": [
@@ -83,6 +83,7 @@ def _step1_read(client: OpenAI, base64_image: str) -> str | None:
         )
         text = response.choices[0].message.content or ""
         logger.info(f"שלב 1 הושלם — {len(text)} תווים")
+        logger.debug(f"טקסט שנקרא:\n{text[:500]}...")  # ✨ לוג חלקי לדיבאג
         return text
     except Exception as e:
         logger.error(f"שגיאה בשלב 1: {e}")
@@ -233,33 +234,43 @@ def _validate(raw: dict) -> ExtractionResult:
         if field_key == "תעודת_זהות" and value is not None:
             digits = re.sub(r"\D", "", str(value))
             if len(digits) < 8 or len(digits) > 10:
-                # במקום לדחות לגמרי, מורידים confidence
                 confidence = max(0.0, confidence - 0.3)
             else:
                 value = digits
 
         elif field_key == "תאריך_קבלה" and value is not None:
             if not re.match(r"^\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}$", str(value).strip()):
-                # תאריך בפורמט לא סטנדרטי - מורידים confidence אבל שומרים
                 confidence = max(0.0, confidence - 0.3)
 
         elif field_key in ("מספר_מרכזי", "מספר_התחייבות") and isinstance(value, list):
-            # מסננים רק תאריכים ברורים, לא כל מספר
+            # ✨ ולידציה חכמה יותר למספרים
             filtered = []
             for v in value:
                 v_str = str(v).strip()
-                # רק אם זה בבירור תאריך (יש 2 מפרידים)
+                # סינון תאריכים ברורים בלבד
                 if v_str.count('/') >= 2 or v_str.count('.') >= 2 or v_str.count('-') >= 2:
+                    continue
+                # סינון מספרים קצרים מדי (ספרה בודדת)
+                digits = re.sub(r"\D", "", v_str)
+                if len(digits) < 4:  # ✨ מספר מרכזי/התחייבות לפחות 4 ספרות
                     continue
                 filtered.append(v)
             value = filtered
+            
+            # ✨ הגבלת מספר ערכים לשדה (מקסימום 3)
+            if len(value) > 3:
+                logger.warning(f"{field_key}: {len(value)} ערכים נמצאו, שומר רק 3 ראשונים")
+                value = value[:3]
+            
             if not value:
                 confidence = 0.0
 
-        # סף confidence - מורידים משמעותית!
-        # שמות: 0.60 במקום 0.85 (כתב יד קשה לקריאה)
-        # שאר השדות: 0.50 במקום 0.70
-        min_conf = 0.60 if field_key in ("שם_פרטי", "שם_משפחה") else 0.50
+        # ✨ סף confidence חדש - עוד יותר מתיר לשמות!
+        if field_key in ("שם_פרטי", "שם_משפחה"):
+            min_conf = 0.40  # ✨ ירידה ל-0.40 לשמות (כתב יד קשה מאוד)
+        else:
+            min_conf = 0.50
+            
         if confidence < min_conf:
             value      = [] if field_def["multi"] else None
             confidence = 0.0
