@@ -107,8 +107,8 @@ def _step2_extract(model: Any, raw_text: str) -> ExtractionResult:
             response = model.generate_content(
                 full_prompt,
                 generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=1024,
-                    response_mime_type="application/json",  # ✨ הוספת JSON mode
+                    max_output_tokens=2048,  # ✨ הגדלה ל-2048
+                    response_mime_type="application/json",
                 )
             )
             
@@ -148,7 +148,7 @@ def _extract_direct(model: Any, base64_image: str) -> ExtractionResult:
             response = model.generate_content(
                 [prompt, image_part],
                 generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=1024,
+                    max_output_tokens=2048,  # ✨ הגדלה ל-2048
                 )
             )
             
