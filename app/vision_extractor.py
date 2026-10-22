@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 
 MAX_RETRIES         = 3
 RETRY_DELAY_SECONDS = 2
-MODEL_NAME          = "claude-3-5-sonnet-20240620"  # ✨ Claude 3.5 Sonnet
+MODEL_NAME          = "claude-3-sonnet-20240229"  # ✨ Claude 3 Sonnet (גרסה יציבה)
 
 ExtractionResult = dict[str, dict[str, Any]]
 
