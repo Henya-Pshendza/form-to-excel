@@ -43,185 +43,248 @@ logger = get_logger(__name__)
 
 st.set_page_config(
     page_title="מטפסי התחייבות → אקסל",
-    page_icon="📋",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;500;600;700&display=swap');
 
     /* ══ בסיס ══ */
     * { font-family: 'Assistant', -apple-system, sans-serif !important; }
-    html, body, .main, .stApp { direction: rtl; background: #fafafa; color: #202124; }
-    .block-container { max-width: 1100px !important; padding: 2rem 1rem !important; }
+    html, body, .main, .stApp { 
+        direction: rtl; 
+        background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%);
+        color: #1a1a1a; 
+    }
+    .block-container { 
+        max-width: 1200px !important; 
+        padding: 3rem 2rem !important; 
+    }
 
     /* ══ כותרת ראשית ══ */
-    h1 { font-size: 32px !important; font-weight: 700 !important; color: #202124 !important; margin-bottom: 8px !important; }
-    .stCaption { color: #5f6368 !important; font-size: 14px !important; margin-bottom: 32px !important; }
+    h1 { 
+        font-size: 38px !important; 
+        font-weight: 300 !important; 
+        color: #1a1a1a !important; 
+        margin-bottom: 0.5rem !important;
+        letter-spacing: -0.5px !important;
+    }
+    .stCaption { 
+        color: #6b7280 !important; 
+        font-size: 15px !important; 
+        font-weight: 400 !important;
+        margin-bottom: 2.5rem !important; 
+    }
 
     /* ══ סרגל צד ══ */
-    [data-testid="stSidebar"] { background: #fff !important; border-left: 1px solid #e8eaed !important; padding-top: 24px !important; }
-    [data-testid="stSidebar"] h2 { font-size: 18px !important; font-weight: 600 !important; color: #202124 !important; }
+    [data-testid="stSidebar"] { 
+        background: #ffffff !important; 
+        border-left: 1px solid #e5e7eb !important; 
+        padding-top: 2rem !important; 
+    }
+    [data-testid="stSidebar"] h2 { 
+        font-size: 16px !important; 
+        font-weight: 600 !important; 
+        color: #1a1a1a !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+        margin-bottom: 1.5rem !important;
+    }
     [data-testid="stSidebar"] .stButton > button {
-        background: #fff !important;
-        border: 1px solid #dadce0 !important;
-        color: #3c4043 !important;
-        border-radius: 8px !important;
+        background: #ffffff !important;
+        border: 1px solid #d1d5db !important;
+        color: #374151 !important;
+        border-radius: 6px !important;
         font-size: 14px !important;
-        height: 40px !important;
         font-weight: 500 !important;
+        height: 40px !important;
+        transition: all 0.15s !important;
     }
     [data-testid="stSidebar"] .stButton > button:hover {
-        background: #f8f9fa !important;
-        border-color: #1a73e8 !important;
+        background: #f9fafb !important;
+        border-color: #9ca3af !important;
     }
 
-    /* ══ כפתורים ══ */
+    /* ══ כפתורים ראשיים ══ */
     .stButton > button {
-        border-radius: 24px !important;
-        font-size: 14px !important;
+        border-radius: 6px !important;
+        font-size: 15px !important;
         font-weight: 500 !important;
-        height: 44px !important;
-        padding: 0 24px !important;
+        height: 48px !important;
+        padding: 0 32px !important;
         border: none !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 1px 2px rgba(0,0,0,.24) !important;
-        transition: all 0.2s !important;
+        transition: all 0.15s !important;
+        letter-spacing: 0.2px !important;
     }
     .stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%) !important;
+        background: #1a1a1a !important;
         color: white !important;
     }
     .stButton > button[kind="primary"]:hover {
-        box-shadow: 0 3px 6px rgba(0,0,0,.16), 0 3px 6px rgba(0,0,0,.23) !important;
+        background: #2d2d2d !important;
         transform: translateY(-1px) !important;
     }
     .stButton > button[kind="secondary"] {
         background: white !important;
-        color: #1a73e8 !important;
-        border: 1px solid #dadce0 !important;
+        color: #1a1a1a !important;
+        border: 1px solid #d1d5db !important;
+    }
+    .stButton > button[kind="secondary"]:hover {
+        background: #f9fafb !important;
+        border-color: #9ca3af !important;
     }
 
     /* ══ כפתור הורדה ══ */
     .stDownloadButton > button {
-        background: #34a853 !important;
+        background: #059669 !important;
         color: white !important;
-        border-radius: 24px !important;
-        font-size: 14px !important;
+        border-radius: 6px !important;
+        font-size: 15px !important;
         font-weight: 500 !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,.12) !important;
+        transition: all 0.15s !important;
     }
     .stDownloadButton > button:hover {
-        background: #2d8e47 !important;
-        box-shadow: 0 3px 6px rgba(0,0,0,.16) !important;
+        background: #047857 !important;
     }
 
     /* ══ מטריקות ══ */
     [data-testid="stMetric"] {
         background: white !important;
-        border-radius: 12px !important;
-        padding: 20px !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,.08) !important;
-        border: 1px solid #e8eaed !important;
+        border-radius: 8px !important;
+        padding: 24px !important;
+        border: 1px solid #e5e7eb !important;
     }
-    [data-testid="stMetricValue"] { font-size: 32px !important; font-weight: 600 !important; color: #1a73e8 !important; }
-    [data-testid="stMetricLabel"] { font-size: 13px !important; color: #5f6368 !important; text-transform: none !important; }
+    [data-testid="stMetricValue"] { 
+        font-size: 36px !important; 
+        font-weight: 300 !important; 
+        color: #1a1a1a !important; 
+    }
+    [data-testid="stMetricLabel"] { 
+        font-size: 13px !important; 
+        color: #6b7280 !important; 
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+        font-weight: 500 !important;
+    }
 
     /* ══ באנר סיכום ══ */
     .summary-banner {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: white;
+        border: 1px solid #e5e7eb;
+        color: #1a1a1a;
         padding: 24px 32px;
-        border-radius: 16px;
+        border-radius: 8px;
         font-size: 16px;
-        font-weight: 500;
+        font-weight: 400;
         text-align: center;
-        margin: 24px 0;
-        box-shadow: 0 4px 12px rgba(102,126,234,.25);
+        margin: 32px 0;
     }
 
     /* ══ כרטיסי שדות ══ */
     .field-card {
         background: white;
-        border-radius: 12px;
-        padding: 16px;
-        margin: 12px 0;
-        border-left: 4px solid #e8eaed;
-        box-shadow: 0 1px 3px rgba(0,0,0,.08);
-        transition: all 0.2s;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 16px 0;
+        border-left: 3px solid #e5e7eb;
+        border: 1px solid #e5e7eb;
+        transition: all 0.15s;
     }
-    .field-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.12); }
-    .field-ok      { border-left-color: #34a853 !important; }
-    .field-low     { border-left-color: #fbbc04 !important; }
-    .field-missing { border-left-color: #ea4335 !important; }
+    .field-card:hover { 
+        border-color: #d1d5db;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .field-ok      { border-left: 3px solid #059669 !important; }
+    .field-low     { border-left: 3px solid #f59e0b !important; }
+    .field-missing { border-left: 3px solid #dc2626 !important; }
 
     /* ══ תגיות סטטוס ══ */
-    .status-ok      { color: #34a853; font-weight: 500; }
-    .status-low     { color: #f9ab00; font-weight: 500; }
-    .status-missing { color: #ea4335; font-weight: 500; }
-    .status-error   { color: #5f6368; font-weight: 500; }
+    .status-ok      { color: #059669; font-weight: 500; }
+    .status-low     { color: #f59e0b; font-weight: 500; }
+    .status-missing { color: #dc2626; font-weight: 500; }
+    .status-error   { color: #6b7280; font-weight: 500; }
 
     /* ══ file uploader ══ */
     [data-testid="stFileUploader"] {
         background: white;
-        border: 2px dashed #dadce0;
-        border-radius: 16px;
-        padding: 40px 20px;
+        border: 2px dashed #d1d5db;
+        border-radius: 8px;
+        padding: 48px 24px;
+    }
+    [data-testid="stFileUploader"]:hover {
+        border-color: #9ca3af;
     }
 
     /* ══ expander ══ */
     [data-testid="stExpander"] {
         background: white !important;
-        border: 1px solid #e8eaed !important;
-        border-radius: 12px !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,.08) !important;
-    }
-
-    /* ══ data editor ══ */
-    [data-testid="stDataFrame"] {
-        border-radius: 12px !important;
-        overflow: hidden !important;
+        border: 1px solid #e5e7eb !important;
+        border-radius: 8px !important;
     }
 
     /* ══ divider ══ */
-    hr { border-color: #e8eaed !important; margin: 32px 0 !important; opacity: 0.6 !important; }
+    hr { 
+        border-color: #e5e7eb !important; 
+        margin: 32px 0 !important; 
+        opacity: 1 !important; 
+    }
 
     /* ══ הודעות ══ */
     .stSuccess {
-        background: #e6f4ea !important;
-        border: 1px solid #34a853 !important;
-        border-radius: 12px !important;
-        color: #137333 !important;
+        background: #f0fdf4 !important;
+        border: 1px solid #86efac !important;
+        border-radius: 8px !important;
+        color: #166534 !important;
     }
     .stWarning {
-        background: #fef7e0 !important;
-        border: 1px solid #f9ab00 !important;
-        border-radius: 12px !important;
-        color: #b06000 !important;
+        background: #fffbeb !important;
+        border: 1px solid #fcd34d !important;
+        border-radius: 8px !important;
+        color: #92400e !important;
     }
     .stError {
-        background: #fce8e6 !important;
-        border: 1px solid #ea4335 !important;
-        border-radius: 12px !important;
-        color: #c5221f !important;
+        background: #fef2f2 !important;
+        border: 1px solid #fca5a5 !important;
+        border-radius: 8px !important;
+        color: #991b1b !important;
     }
     .stInfo {
-        background: #e8f0fe !important;
-        border: 1px solid #1a73e8 !important;
-        border-radius: 12px !important;
-        color: #185abc !important;
+        background: #f0f9ff !important;
+        border: 1px solid #93c5fd !important;
+        border-radius: 8px !important;
+        color: #1e40af !important;
     }
 
     /* ══ inputs ══ */
     .stTextInput > div > div, .stSelectbox > div > div {
-        border-radius: 8px !important;
-        border-color: #dadce0 !important;
+        border-radius: 6px !important;
+        border-color: #d1d5db !important;
         background: white !important;
+    }
+    .stTextInput > div > div:focus-within, .stSelectbox > div > div:focus-within {
+        border-color: #9ca3af !important;
+    }
+
+    /* ══ selectbox ══ */
+    .stSelectbox label {
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        color: #374151 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.3px !important;
     }
 
     /* ══ progress bar ══ */
-    .stProgress > div > div > div { background: linear-gradient(90deg, #1a73e8, #34a853) !important; border-radius: 8px !important; }
+    .stProgress > div > div > div { 
+        background: #1a1a1a !important; 
+        border-radius: 4px !important; 
+    }
+
+    /* ══ הסתרת אלמנטים מיותרים ══ */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -255,7 +318,7 @@ def _init_state() -> None:
 def main() -> None:
     _init_state()
 
-    st.title("📋 מטפסי התחייבות → אקסל")
+    st.title("מטפסי התחייבות → אקסל")
     
     # תצוגת המודל הנוכחי
     provider_names = {
@@ -287,12 +350,12 @@ def _render_sidebar() -> None:
         # ══════════════════════════════════════════════════════════════════
         # בחירת מודל AI
         # ══════════════════════════════════════════════════════════════════
-        st.subheader("🤖 מודל AI")
+        st.subheader("מודל AI")
         
         provider_options = {
-            "gemini": "🟢 Google Gemini 3.6 Flash",
-            "openai": "🔵 OpenAI GPT-4o",
-            "anthropic": "🟣 Anthropic Claude 3 Opus",
+            "gemini": "Google Gemini 3.6 Flash",
+            "openai": "OpenAI GPT-4o",
+            "anthropic": "Anthropic Claude 3 Opus",
         }
         
         selected_provider = st.selectbox(
@@ -318,9 +381,9 @@ def _render_sidebar() -> None:
         api_key = os.getenv(current_key, "")
         
         if api_key:
-            st.success(f"✅ {current_key} מוגדר")
+            st.success(f"{current_key} מוגדר")
         else:
-            st.error(f"❌ {current_key} חסר")
+            st.error(f"{current_key} חסר")
             st.info(f"הוסיפי ל-Secrets:\n```\n{current_key} = \"...\"\n```")
 
         st.divider()
@@ -342,13 +405,12 @@ def _render_sidebar() -> None:
         st.subheader("מקרא")
         st.markdown("""
         <span class="status-ok">תקין</span><br><br>
-        <span class="status-low">לא בטוח — בדקי</span><br><br>
-        <span class="status-missing">חסר — לא נמצא</span><br><br>
-        <span class="status-error">שגיאה טכנית</span>
+        <span class="status-low">לא בטוח</span><br><br>
+        <span class="status-missing">חסר</span>
         """, unsafe_allow_html=True)
 
         st.divider()
-        st.caption("האקתון AI קוד פתוח 2026")
+        st.caption("משרד הבריאות • 2026")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -356,35 +418,25 @@ def _render_sidebar() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _render_upload_section() -> None:
-    col1, col2 = st.columns([2, 1])
-
-    with col1:
-        st.subheader("העלאת טפסים")
-        uploaded_files = st.file_uploader(
-            label="גרור טפסים לכאן או לחץ לבחירה",
-            type=["pdf", "jpg", "jpeg", "png", "tiff", "bmp"],
-            accept_multiple_files=True,
-            help="PDF סרוק, צילום טלפון, תמונה — הכל נתמך",
-        )
-
-    with col2:
-        st.subheader("שדות לחילוץ")
-        for field_key, field_def in FIELDS.items():
-            multi_mark = " (כמה)" if field_def["multi"] else ""
-            req_mark   = " *"     if field_def["required"] else ""
-            st.markdown(f"• **{field_def['excel_col']}**{multi_mark}{req_mark}")
-        st.caption("* = שדה חובה")
+    st.subheader("העלאת טפסים")
+    uploaded_files = st.file_uploader(
+        label="גרור טפסים לכאן או לחץ לבחירה",
+        type=["pdf", "jpg", "jpeg", "png", "tiff", "bmp"],
+        accept_multiple_files=True,
+        help="PDF סרוק, צילום טלפון, תמונה",
+    )
 
     if st.session_state.error_msg:
         st.error(st.session_state.error_msg)
 
     if uploaded_files:
-        st.info(f"נבחרו **{len(uploaded_files)}** קבצים")
+        st.info(f"נבחרו {len(uploaded_files)} קבצים")
         if st.button("עבד טפסים", type="primary", use_container_width=True,
                      disabled=st.session_state.processing):
             _run_processing(uploaded_files)
     else:
-        st.markdown("---\n**טיפ:** ניתן לגרור מספר קבצים בבת אחת. כל דף PDF יעובד בנפרד.")
+        st.markdown("---")
+        st.caption("ניתן לגרור מספר קבצים בבת אחת. כל דף PDF יעובד בנפרד.")
 
 
 def _run_processing(uploaded_files) -> None:
@@ -542,7 +594,7 @@ def _render_results_section() -> None:
     st.divider()
 
     # ── 4. טבלה מלאה לעריכה ──────────────────────────────────────────────
-    with st.expander("📊 טבלה מלאה לעריכה וייצוא", expanded=True):
+    with st.expander("טבלה מלאה לעריכה וייצוא", expanded=True):
         edited_forms = _render_editable_table(forms)
         st.session_state.forms = edited_forms
 
@@ -645,16 +697,16 @@ def _render_form_with_preview(
 
     # עמודה שמאל — תמונת הטופס המקורי
     with col_img:
-        st.markdown("**📄 טופס מקורי**")
+        st.markdown("**טופס מקורי**")
         img_bytes = st.session_state.form_images.get(orig_idx)
         if img_bytes:
             st.image(img_bytes, use_column_width=True, caption=f"דף {selected_form.get('page', 1)}")
         else:
-            st.info("תמונה לא זמינה לטופס זה")
+            st.info("תמונה לא זמינה")
 
     # עמודה ימין — שדות מחולצים
     with col_fields:
-        st.markdown("**📋 שדות שחולצו**")
+        st.markdown("**שדות שחולצו**")
         _render_field_cards(selected_form, orig_idx, all_forms)
 
 
@@ -680,25 +732,25 @@ def _render_field_cards(form: dict, form_idx: int, all_forms: list[dict]) -> Non
         # CSS class לפי סטטוס
         if status == FieldStatus.OK:
             css_class = "field-ok"
-            icon = "✓"
+            icon = ""
         elif status == FieldStatus.LOW:
             css_class = "field-low"
-            icon = "⚠"
+            icon = ""
         elif status == FieldStatus.MISSING:
             css_class = "field-missing"
-            icon = "✗"
+            icon = ""
         else:
             css_class = "field-missing"
-            icon = "⚡"
+            icon = ""
 
         col_name = field_def["excel_col"]
 
         # תצוגת הכרטיס
         st.markdown(
             f'<div class="field-card {css_class}">'
-            f'<small>{icon} <b>{col_name}</b> '
-            f'<span style="color:#999;font-size:11px">({confidence:.0%})</span></small><br>'
-            f'{display_val if display_val else "<i style=\'color:#999\'>לא נמצא</i>"}'
+            f'<small><b>{col_name}</b> '
+            f'<span style="color:#9ca3af;font-size:11px">({confidence:.0%})</span></small><br>'
+            f'{display_val if display_val else "<i style=\'color:#9ca3af\'>לא נמצא</i>"}'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -706,10 +758,10 @@ def _render_field_cards(form: dict, form_idx: int, all_forms: list[dict]) -> Non
         # אם שדה לא תקין — מציגים תיבת עריכה
         if status in (FieldStatus.LOW, FieldStatus.MISSING, FieldStatus.ERROR):
             new_val = st.text_input(
-                label     = f"✏️ תיקון: {col_name}",
+                label     = f"תיקון: {col_name}",
                 value     = display_val,
                 key       = f"fix_{form_idx}_{field_key}",
-                placeholder = f"הכניסי ערך לשדה {col_name}...",
+                placeholder = f"הכניסי ערך לשדה {col_name}",
                 help      = f"ערוך את השדה {col_name} ידנית",
             )
             # אם שונה — מעדכנים
@@ -845,11 +897,11 @@ def _dataframe_to_forms(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _render_export_section(forms: list[dict]) -> None:
-    st.subheader("📥 ייצוא לאקסל")
+    st.subheader("ייצוא לאקסל")
     col1, col2 = st.columns([1, 2])
 
     with col1:
-        if st.button("📊 צור קובץ אקסל", type="primary", use_container_width=True):
+        if st.button("צור קובץ אקסל", type="primary", use_container_width=True):
             try:
                 with st.spinner("יוצר קובץ אקסל..."):
                     output_path = export_to_excel(forms)
@@ -858,18 +910,18 @@ def _render_export_section(forms: list[dict]) -> None:
                     st.session_state.excel_filename = output_path.name
                 st.rerun()
             except Exception as e:
-                st.error(f"❌ שגיאה ביצירת האקסל: {e}")
+                st.error(f"שגיאה ביצירת האקסל: {e}")
 
     with col2:
         if st.session_state.excel_bytes:
             st.download_button(
-                label     = "⬇️ הורד אקסל",
+                label     = "הורד אקסל",
                 data      = st.session_state.excel_bytes,
                 file_name = st.session_state.excel_filename,
                 mime      = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width = True,
             )
-            st.success(f"✓ קובץ מוכן: **{st.session_state.excel_filename}**")
+            st.success(f"קובץ מוכן: {st.session_state.excel_filename}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
