@@ -15,126 +15,105 @@ _SENDERS_LIST = ", ".join(ALL_SENDERS)
 # STEP 1 — Read everything visible in the image
 # ─────────────────────────────────────────────────────────────────────────────
 
-STEP1_READ_PROMPT = """Read this Israeli medical form carefully. Extract ALL visible text.
+STEP1_READ_PROMPT = """Read ALL visible text from this Israeli medical form. Transcribe everything you see.
 
-Focus on these areas in order:
+**CRITICAL: Read Hebrew handwritten names letter-by-letter, even if unclear!**
 
-1. HANDWRITTEN HEBREW NAMES (usually at top of the form):
-   - שם פרטי (first name)
-   - שם משפחה (family name)
-   Read the handwriting carefully, even if unclear.
+Organize the text into these sections:
 
-2. BARCODE STICKERS on the page:
-   - Sticker with word "מרכזי" on/near it → this is a מרכזי number
-   - Sticker with ONLY barcode + number (NO text label) → this is a התחייבות number
-   Read ALL sticker numbers.
+1. **PATIENT NAMES** (handwritten Hebrew, usually near top):
+   - שם פרטי (FIRST name): ____
+   - שם משפחה (FAMILY name): ____
+   Note: "שם: כהן" means family name is כהן, but first name is MISSING - write "empty" for first name!
 
-3. HANDWRITTEN ID NUMBER:
-   - ת.ז. (8-9 digits, usually handwritten near the names)
+2. **ID NUMBER** (ת.ז., usually handwritten):
+   ____
 
-4. FORM FIELD "מספר התחייבות":
-   - Look for a printed form field labeled exactly "מספר התחייבות"
-   - The number written in this field is a התחייבות number
+3. **BARCODE STICKERS**:
+   List ALL barcode stickers you see. For each, write if it has the word "מרכזי" on/near it:
+   - Sticker 1: [number] (has "מרכזי"? yes/no)
+   - Sticker 2: [number] (has "מרכזי"? yes/no)
 
-5. STAMP OR HANDWRITTEN DATE (OUTSIDE the form):
-   - Look for "התקבל" stamp with date inside OR handwritten date near "התקבל"
-   - This date is when the form was received (NOT a date printed on the form itself)
-   - Usually appears as a rubber stamp or handwritten addition on the page
+4. **"התקבל" STAMP/DATE** (received date - look for stamp or handwriting with "התקבל"):
+   ____
 
-6. ORGANIZATION NAME:
-   - כללית, מכבי, מאוחדת, or לאומית (in header/logo)
+5. **ORGANIZATION** (header/logo - כללית, מכבי, מאוחדת, לאומית, or hospital name):
+   ____
 
-Please organize your output:
+6. **OTHER TEXT** (everything else you see):
+   ____
+
+**FORMAT:**
 ```
-Names (handwritten):
-שם פרטי: [name or empty if missing]
-שם משפחה: [name or empty if missing]
-
-ID (handwritten): [8-9 digits or empty]
-
-Sticker - מרכזי (has "מרכזי" label):
-Number: [digits or empty]
-
-Sticker - התחייבות (barcode only, NO label):
-Number: [digits or empty]
-
-Form field - התחייבות (printed field labeled "מספר התחייבות"):
-Number: [digits or empty]
-
-Received date (stamp or handwritten OUTSIDE form, near "התקבל"):
-Date: [DD/MM/YYYY or empty]
-
-Organization: [כללית/מכבי/מאוחדת/לאומית or empty]
+שם פרטי: [write first name OR "empty"]
+שם משפחה: [write family name OR "empty"]
+ת.ז.: [ID number OR "empty"]
+Stickers: [list all with yes/no for "מרכזי"]
+התקבל date: [date OR "empty"]
+Organization: [name OR "empty"]
+Other text: [everything else]
 ```
 
-CRITICAL: 
-- תאריך קבלה = ONLY from stamp/handwriting OUTSIDE the form (not dates printed on form)
-- מספר התחייבות = ONLY from barcode sticker OR form field labeled "מספר התחייבות"
-- מספר מרכזי = ONLY from sticker with "מרכזי" label"""
+Read everything, including unclear handwriting - just do your best!
 
 # ─────────────────────────────────────────────────────────────────────────────
 # STEP 2 — Extract structured fields from the transcribed text
 # ─────────────────────────────────────────────────────────────────────────────
 
-STEP2_EXTRACT_PROMPT = f"""Extract 7 fields from the transcribed Israeli medical form text.
+STEP2_EXTRACT_PROMPT = f"""Extract these 7 fields from the transcribed text:
 
-🎯 EXTRACTION RULES:
+📋 RULES:
 
-1️⃣ NAMES (שם_פרטי, שם_משפחה):
-   • From "Names (handwritten)" section
-   • Hebrew patient names only
-   • If missing/empty → null
-   • Confidence 0.55-0.90 depending on clarity
+1. **שם_פרטי** (first name):
+   - Hebrew FIRST name only
+   - If text says "empty" or only shows family name → null
+   - Confidence 0.50-0.90
 
-2️⃣ תעודת_זהות:
-   • From "ID (handwritten)" section
-   • 8-9 digits only
-   • If missing → null
+2. **שם_משפחה** (family name):
+   - Hebrew FAMILY name only
+   - If text says "empty" → null
+   - Confidence 0.50-0.90
 
-3️⃣ מספר_מרכזי [list]:
-   • From "Sticker - מרכזי" section ONLY
-   • These are stickers that have the word "מרכזי" on them
-   • Return as list: ["number"]
-   • If missing → []
+3. **תעודת_זהות** (ID):
+   - 8-9 digits
+   - If missing → null
 
-4️⃣ מספר_התחייבות [list]:
-   • From TWO possible sources:
-     A) "Sticker - התחייבות" section (barcode sticker without label)
-     B) "Form field - התחייבות" section (field labeled "מספר התחייבות")
-   • Combine numbers from BOTH sources into one list
-   • Return as list: ["number1", "number2"]
-   • If missing from both → []
+4. **מספר_מרכזי** (list):
+   - ONLY stickers where "מרכזי"=yes
+   - Return as list: ["123456"]
+   - If no stickers with "מרכזי" → []
 
-5️⃣ תאריך_קבלה:
-   • From "Received date" section ONLY
-   • This is a stamp or handwritten date OUTSIDE the form
-   • Format: DD/MM/YYYY
-   • NOT dates printed on the form itself
-   • If missing → null
+5. **מספר_התחייבות** (list):
+   - ONLY stickers where "מרכזי"=no (barcode without "מרכזי" label)
+   - Return as list: ["123456"]
+   - If no such stickers → []
 
-6️⃣ גורם_שולח:
-   • From "Organization" section
-   • Must be one of: {_SENDERS_LIST}
-   • If missing → null
+6. **תאריך_קבלה** (date):
+   - From "התקבל date" field ONLY
+   - Format: DD/MM/YYYY or DD.MM.YYYY
+   - If missing → null
 
-7️⃣ CONFIDENCE:
-   • Clear text: 0.80-0.95
-   • Handwritten (clear): 0.65-0.80
-   • Handwritten (unclear): 0.50-0.65
-   • Missing: 0.0
+7. **גורם_שולח** (organization):
+   - From "Organization" field
+   - Must match one of: {_SENDERS_LIST}
+   - If you see a close match (e.g., "וולפסון"), find the full name from the list
+   - If missing → null
 
-✨ OUTPUT (valid JSON only):
+📊 CONFIDENCE:
+- Clear: 0.75-0.95
+- Handwritten (readable): 0.55-0.75
+- Unclear: 0.45-0.60
+
+✅ OUTPUT (JSON only):
 {{
-  "שם_פרטי":          {{"value": "דוד",          "confidence": 0.70}},
-  "שם_משפחה":         {{"value": "כהן",          "confidence": 0.65}},
-  "תעודת_זהות":       {{"value": "123456789",    "confidence": 0.75}},
-  "מספר_מרכזי":       {{"value": ["2344936"],    "confidence": 0.90}},
-  "תאריך_קבלה":       {{"value": "21/08/2026",   "confidence": 0.85}},
-  "גורם_שולח":        {{"value": "כללית",        "confidence": 0.95}},
-  "מספר_התחייבות":    {{"value": ["4034345113"], "confidence": 0.85}}
-}}
-
-Missing → null (lists → [])"""
+  "שם_פרטי":          {{"value": null, "confidence": 0.0}},
+  "שם_משפחה":         {{"value": "כהן", "confidence": 0.70}},
+  "תעודת_זהות":       {{"value": "123456789", "confidence": 0.80}},
+  "מספר_מרכזי":       {{"value": ["2344936"], "confidence": 0.90}},
+  "תאריך_קבלה":       {{"value": "24/08/2023", "confidence": 0.90}},
+  "גורם_שולח":        {{"value": "מכבי", "confidence": 0.95}},
+  "מספר_התחייבות":    {{"value": ["947828"], "confidence": 0.85}}
+}}"""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Legacy single-step prompts (fallback)
